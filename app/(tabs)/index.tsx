@@ -47,16 +47,29 @@ export default function HomeScreen() {
     skipPhase,
   } = useTimer(timerSettings);
 
+  // Reset timer when settings change (only if not running)
+  React.useEffect(() => {
+    if (session.state === 'idle') {
+      resetTimer();
+    }
+  }, [timerSettings, resetTimer]);
+
   // Load coins on component mount
   React.useEffect(() => {
     const loadCoins = async () => {
       try {
-        const savedCoins = await AsyncStorage.getItem(COINS_STORAGE_KEY);
-        if (savedCoins !== null) {
-          setTotalCoins(parseInt(savedCoins, 10));
-        }
+        // Clear coins for now as requested by user
+        await AsyncStorage.removeItem(COINS_STORAGE_KEY);
+        setTotalCoins(0);
+        console.log('? Cleared all coins as requested');
+        
+        // Uncomment below to restore coin loading later
+        // const savedCoins = await AsyncStorage.getItem(COINS_STORAGE_KEY);
+        // if (savedCoins !== null) {
+        //   setTotalCoins(parseInt(savedCoins, 10));
+        // }
       } catch (error) {
-        console.error('Failed to load coins:', error);
+        console.error('Failed to load/clear coins:', error);
       }
     };
     loadCoins();
@@ -79,7 +92,7 @@ export default function HomeScreen() {
     if (session.state === 'completed' && session.coinsEarned > 0) {
       saveCoins();
     }
-  }, [session.state, session.coinsEarned, totalCoins]);
+  }, [session.state, session.coinsEarned]); // Removed totalCoins to prevent infinite loop
 
   // Update message every 10+ seconds
   React.useEffect(() => {
@@ -335,10 +348,7 @@ export default function HomeScreen() {
             settings={timerSettings}
             onSettingsChange={(newSettings: TimerSettings) => {
               setTimerSettings(newSettings);
-              // Reset timer with new settings if it's idle
-              if (session.state === 'idle') {
-                resetTimer();
-              }
+              // Timer will auto-reset via useEffect when settings change
               // Don't close modal - let user continue adjusting settings
             }}
           />
