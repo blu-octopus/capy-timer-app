@@ -9,6 +9,14 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
+    // Inter font family
+    'Inter_18pt-Regular': require('../assets/fonts/Inter/static/Inter_18pt-Regular.ttf'),
+    'Inter_18pt-Medium': require('../assets/fonts/Inter/static/Inter_18pt-Medium.ttf'),
+    'Inter_18pt-SemiBold': require('../assets/fonts/Inter/static/Inter_18pt-SemiBold.ttf'),
+    'Inter_18pt-Bold': require('../assets/fonts/Inter/static/Inter_18pt-Bold.ttf'),
+    'Inter_18pt-Light': require('../assets/fonts/Inter/static/Inter_18pt-Light.ttf'),
+    
+    // Keep SpaceMono for fallback
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
