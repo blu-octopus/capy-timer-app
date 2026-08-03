@@ -154,7 +154,7 @@ export const TimePicker: React.FC<TimePickerProps> = ({
       <View style={styles.quickSelectRow}>
         <Text style={[styles.quickSelectLabel, { color: colors.text }]}>Quick Select:</Text>
         <View style={styles.quickSelectButtons}>
-          {type === 'focus' ? [
+          {(type === 'focus' ? [
             { label: '5m', minutes: 5, seconds: 0 },
             { label: '15m', minutes: 15, seconds: 0 },
             { label: '25m', minutes: 25, seconds: 0 },
@@ -164,7 +164,7 @@ export const TimePicker: React.FC<TimePickerProps> = ({
             { label: '5m', minutes: 5, seconds: 0 },
             { label: '10m', minutes: 10, seconds: 0 },
             { label: '15m', minutes: 15, seconds: 0 },
-          ]}.map((option) => (
+          ]).map((option) => (
             <Text
               key={option.label}
               style={[

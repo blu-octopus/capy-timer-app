@@ -10,7 +10,7 @@ import { Layout, Spacing } from '@/constants/Spacing';
 import { Typography } from '@/constants/Typography';
 import { useCategories } from '@/hooks/useCategories';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { CATEGORY_COLORS } from '@/constants/Categories';
+import { CATEGORY_COLORS } from '@/types/Categories';
 import { BlurView } from 'expo-blur';
 import React, { useState } from 'react';
 import {

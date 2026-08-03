@@ -5,8 +5,7 @@
  * Handles default categories and user-created custom categories.
  */
 
-import { Category } from '@/types/Categories';
-import { CATEGORY_COLORS, DEFAULT_CATEGORIES } from '@/constants/Categories';
+import { CATEGORY_COLORS, Category, DEFAULT_CATEGORIES } from '@/types/Categories';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback, useEffect, useState } from 'react';
 
