@@ -1,7 +1,13 @@
-import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
 
-import { USE_NATIVE_DRIVER } from '@/src/theme/animation';
 import { colors } from '@/src/theme/tokens';
 
 interface Particle {
@@ -25,17 +31,23 @@ const PARTICLES: Particle[] = [
 const DURATION = 420;
 
 function Spark({ tx, ty, size, delay, color }: Particle) {
-  const progress = useRef(new Animated.Value(0)).current;
+  const progress = useSharedValue(0);
 
   useEffect(() => {
-    Animated.timing(progress, {
-      toValue: 1,
-      duration: DURATION,
+    progress.value = withDelay(
       delay,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: USE_NATIVE_DRIVER,
-    }).start();
+      withTiming(1, { duration: DURATION, easing: Easing.out(Easing.quad) }),
+    );
   }, [delay, progress]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const p = progress.value;
+    return {
+      // Fade in over the first 30% of the burst, then out.
+      opacity: p < 0.3 ? p / 0.3 : 1 - (p - 0.3) / 0.7,
+      transform: [{ translateX: tx * p }, { translateY: ty * p }, { scale: 0.3 + 0.7 * p }],
+    };
+  });
 
   return (
     <Animated.View
@@ -48,17 +60,8 @@ function Spark({ tx, ty, size, delay, color }: Particle) {
           marginLeft: -size / 2,
           marginTop: -size / 2,
           backgroundColor: color,
-          // Fade in over the first 30% of the burst, then out.
-          opacity: progress.interpolate({
-            inputRange: [0, 0.3, 1],
-            outputRange: [0, 1, 0],
-          }),
-          transform: [
-            { translateX: progress.interpolate({ inputRange: [0, 1], outputRange: [0, tx] }) },
-            { translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [0, ty] }) },
-            { scale: progress.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) },
-          ],
         },
+        animatedStyle,
       ]}
     />
   );

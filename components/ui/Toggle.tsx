@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
-import { USE_NATIVE_DRIVER } from '@/src/theme/animation';
 import { colors, seeds } from '@/src/theme/tokens';
 import { Sparks } from './Sparks';
 import { WobbleBorder } from './WobbleBorder';
@@ -29,15 +29,15 @@ export function Toggle({ value, onValueChange, disabled, accessibilityLabel }: T
     wasOn.current = value;
   }, [value]);
 
-  const offset = useRef(new Animated.Value(value ? THUMB_TRAVEL : 0)).current;
+  const offset = useSharedValue(value ? THUMB_TRAVEL : 0);
 
   useEffect(() => {
-    Animated.timing(offset, {
-      toValue: value ? THUMB_TRAVEL : 0,
-      duration: 200,
-      useNativeDriver: USE_NATIVE_DRIVER,
-    }).start();
+    offset.value = withTiming(value ? THUMB_TRAVEL : 0, { duration: 200 });
   }, [value, offset]);
+
+  const thumbStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: offset.value }],
+  }));
 
   const tint = value ? colors.brown : colors.greyPrimary;
 
@@ -55,7 +55,7 @@ export function Toggle({ value, onValueChange, disabled, accessibilityLabel }: T
         style={[
           styles.thumb,
           { backgroundColor: value ? colors.white : colors.buttonSecondary },
-          { transform: [{ translateX: offset }] },
+          thumbStyle,
         ]}
       >
         <WobbleBorder

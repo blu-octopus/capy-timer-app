@@ -1,22 +1,28 @@
 {
   "expo": {
-    "name": "capy-timer",
+    "name": "Capy Timer",
     "slug": "capy-timer",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "capytimer",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bluoctopus.capytimer",
+      "infoPlist": {
+        "UIBackgroundModes": ["fetch", "processing"]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.bluoctopus.capytimer",
+      "permissions": ["RECEIVE_BOOT_COMPLETED", "SCHEDULE_EXACT_ALARM", "POST_NOTIFICATIONS"]
     },
     "web": {
       "bundler": "metro",
@@ -34,9 +40,15 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-iap",
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          "color": "#823D00"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

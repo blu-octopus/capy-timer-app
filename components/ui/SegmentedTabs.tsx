@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import { LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { colors } from '@/src/theme/tokens';
 import { Text } from './Text';
@@ -45,10 +46,8 @@ export function SegmentedTabs<T extends string>({
 
   const active = layouts[value];
 
-  // Width can't use the native driver, so keep the whole indicator on the JS
-  // driver rather than splitting drivers across one style.
-  const indicatorX = useRef(new Animated.Value(0)).current;
-  const indicatorWidth = useRef(new Animated.Value(0)).current;
+  const indicatorX = useSharedValue(0);
+  const indicatorWidth = useSharedValue(0);
   const settled = useRef(false);
 
   useEffect(() => {
@@ -56,21 +55,18 @@ export function SegmentedTabs<T extends string>({
     // Snap into place on first measure so it doesn't fly in from zero.
     const duration = settled.current ? 200 : 0;
     settled.current = true;
-    Animated.parallel([
-      Animated.timing(indicatorX, { toValue: active.x, duration, useNativeDriver: false }),
-      Animated.timing(indicatorWidth, { toValue: active.width, duration, useNativeDriver: false }),
-    ]).start();
+    indicatorX.value = withTiming(active.x, { duration });
+    indicatorWidth.value = withTiming(active.width, { duration });
   }, [active, indicatorX, indicatorWidth]);
+
+  const indicatorStyle = useAnimatedStyle(() => ({
+    width: indicatorWidth.value,
+    transform: [{ translateX: indicatorX.value }],
+  }));
 
   return (
     <View style={[styles.track, width != null && { width, maxWidth: '100%' }]}>
-      <Animated.View
-        style={[
-          styles.indicator,
-          { width: indicatorWidth, transform: [{ translateX: indicatorX }] },
-          !active && styles.hidden,
-        ]}
-      />
+      <Animated.View style={[styles.indicator, indicatorStyle, !active && styles.hidden]} />
       {options.map((option) => {
         const selected = option.value === value;
         return (
