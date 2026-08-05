@@ -1,72 +1,50 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
+import { CapyMascot, type CapyMood } from '@/components/capy/CapyMascot';
+import { Coin } from '@/components/capy/Coin';
+import { CoinWallet } from '@/components/capy/CoinWallet';
 import { Button } from '@/components/ui/Button';
 import { SegmentedTabs } from '@/components/ui/SegmentedTabs';
 import { Text } from '@/components/ui/Text';
-import { Toggle } from '@/components/ui/Toggle';
-import { colors, seeds } from '@/src/theme/tokens';
-import { useMeasuredSize, WobbleBorder } from '@/components/ui/WobbleBorder';
+import { colors } from '@/src/theme/tokens';
 
-// Temporary primitive gallery — replaced by the Home/Timer screen next.
+// Temporary gallery — replaced by the Home/Timer screen next.
 export default function HomeScreen() {
-  const [direction, setDirection] = useState<'up' | 'down'>('down');
-  const [timeframe, setTimeframe] = useState<'today' | 'week' | 'month' | 'custom'>('today');
-  const [prep, setPrep] = useState(false);
-  const card = useMeasuredSize();
+  const [mood, setMood] = useState<CapyMood>('idle');
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Text variant="h1">Primitives</Text>
+      <CoinWallet amount={78160} onPress={() => {}} />
 
-      <Text variant="mainTimerNumber">25:00</Text>
-      <Text variant="secondaryTimerNumber">05:00</Text>
-
-      <View style={styles.row}>
-        <Button label="filled" onPress={() => {}} />
-        <Button label="outlined" variant="outlined" onPress={() => {}} />
-        <Button label="ghost" variant="ghost" onPress={() => {}} />
-      </View>
+      <CapyMascot size={206} mood={mood} />
 
       <SegmentedTabs
         options={[
-          { value: 'up', label: 'Count Up' },
-          { value: 'down', label: 'Count Down' },
+          { value: 'idle', label: 'Idle' },
+          { value: 'working', label: 'Working' },
+          { value: 'paused', label: 'Paused' },
+          { value: 'celebrating', label: 'Celebrate' },
         ]}
-        value={direction}
-        onChange={setDirection}
-        width={303}
-      />
-
-      <SegmentedTabs
-        options={[
-          { value: 'today', label: 'Today' },
-          { value: 'week', label: 'Week' },
-          { value: 'month', label: 'Month' },
-          { value: 'custom', label: 'Custom' },
-        ]}
-        value={timeframe}
-        onChange={setTimeframe}
+        value={mood}
+        onChange={setMood}
         width={353}
       />
 
+      <Text variant="mainTimerNumber">25:00</Text>
+
       <View style={styles.row}>
-        <Text variant="body">5-Min Prep Session</Text>
-        <Toggle value={prep} onValueChange={setPrep} accessibilityLabel="Prep session" />
+        <Coin size={24} />
+        <Coin size={36} />
+        <Coin size={48} />
       </View>
 
-      <View onLayout={card.onLayout} style={styles.card}>
-        {card.size.width > 0 && (
-          <WobbleBorder
-            width={card.size.width}
-            height={card.size.height}
-            radius={10}
-            seed={seeds.trendCard}
-          />
-        )}
-        <Text variant="body">Wobble card</Text>
-        <Text variant="stat">2/4</Text>
+      <View style={styles.row}>
+        <CapyMascot size={120} locked />
+        <CapyMascot size={120} />
       </View>
+
+      <Button label="Session Details" variant="outlined" onPress={() => {}} />
     </ScrollView>
   );
 }
@@ -80,15 +58,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 16,
     alignItems: 'center',
-  },
-  card: {
-    width: 152,
-    height: 84,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: colors.white,
-    justifyContent: 'space-between',
   },
 });
