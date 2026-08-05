@@ -29,6 +29,21 @@ jest.mock('expo-constants', () => ({
   },
 }));
 
+jest.mock('expo-notifications', () => ({
+  setNotificationHandler: jest.fn(),
+  getPermissionsAsync: jest.fn().mockResolvedValue({ granted: true, canAskAgain: true }),
+  requestPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+  scheduleNotificationAsync: jest.fn().mockResolvedValue('mock-notification-id'),
+  cancelScheduledNotificationAsync: jest.fn().mockResolvedValue(undefined),
+  setNotificationChannelAsync: jest.fn().mockResolvedValue(undefined),
+  SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval' },
+  AndroidImportance: { DEFAULT: 3 },
+}));
+
+jest.mock('expo-sqlite', () => ({
+  openDatabaseAsync: jest.fn().mockRejectedValue(new Error('SQLite is not available in tests')),
+}));
+
 // Silence the warning about timers
 global.console = {
   ...console,

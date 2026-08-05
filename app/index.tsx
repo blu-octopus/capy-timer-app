@@ -18,6 +18,7 @@ import { Sparks } from '@/components/ui/Sparks';
 import { Text } from '@/components/ui/Text';
 import { TimerClock } from '@/components/ui/TimerClock';
 import { useRunTicker } from '@/hooks/useRunTicker';
+import { useSessionNotifications } from '@/hooks/useSessionNotifications';
 import { newSessionId, recordSession } from '@/src/db/sessions';
 import { useAppStore } from '@/src/store';
 import { resolvePosition, totalPlanMs } from '@/src/store/types';
@@ -32,6 +33,7 @@ const PHASE_LABEL = {
 
 export default function TimerScreen() {
   useRunTicker();
+  useSessionNotifications();
   const router = useRouter();
 
   const status = useAppStore((s) => s.status);

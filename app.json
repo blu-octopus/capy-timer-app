@@ -10,10 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.bluoctopus.capytimer",
-      "infoPlist": {
-        "UIBackgroundModes": ["fetch", "processing"]
-      }
+      "bundleIdentifier": "com.bluoctopus.capytimer"
     },
     "android": {
       "adaptiveIcon": {
@@ -21,8 +18,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.bluoctopus.capytimer",
-      "permissions": ["RECEIVE_BOOT_COMPLETED", "SCHEDULE_EXACT_ALARM", "POST_NOTIFICATIONS"]
+      "package": "com.bluoctopus.capytimer"
     },
     "web": {
       "bundler": "metro",
