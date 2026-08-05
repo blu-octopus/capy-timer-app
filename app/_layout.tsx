@@ -12,10 +12,12 @@ import {
 import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
+import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { loadCategories } from '@/src/db/categories';
 import { colors } from '@/src/theme/tokens';
 
 // Design is light-only (capy-ui has no dark tokens).
@@ -40,6 +42,11 @@ export default function RootLayout() {
     Inter_600SemiBold,
     Inter_700Bold,
   });
+
+  // Categories live in SQLite; hydrate the store cache once at startup.
+  useEffect(() => {
+    void loadCategories();
+  }, []);
 
   if (!loaded) return null;
 

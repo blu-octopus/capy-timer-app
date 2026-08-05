@@ -55,13 +55,13 @@ export function buildSchedule(plan: SessionPlan): PhaseSegment[] {
   const breakMs = Math.max(0, plan.breakMin) * 60 * 1000;
   const loops = Math.max(1, plan.loops);
 
+  // Every loop is a full focus + break cycle, including the last: the design
+  // totals 20 min focus / 10 min break / 2 loops as a flat hour.
   for (let loopIndex = 0; loopIndex < loops; loopIndex++) {
     segments.push({ phase: 'focus', loopIndex, offsetMs, durationMs: focusMs });
     offsetMs += focusMs;
 
-    // No trailing break — the run ends on the last focus phase.
-    const isLastLoop = loopIndex === loops - 1;
-    if (breakMs > 0 && !isLastLoop) {
+    if (breakMs > 0) {
       segments.push({ phase: 'break', loopIndex, offsetMs, durationMs: breakMs });
       offsetMs += breakMs;
     }

@@ -232,11 +232,11 @@ export const useAppStore = create<AppState>()(
       name: 'capy-timer-store',
       storage: createJSONStorage(() => AsyncStorage),
       // Run state is wall-clock derived and meaningless after a cold start.
+      // Categories are owned by SQLite and reloaded on launch.
       partialize: (state) => ({
         plan: state.plan,
         wallet: state.wallet,
         companions: state.companions,
-        categories: state.categories,
       }),
     },
   ),

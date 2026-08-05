@@ -41,9 +41,9 @@ function setup(planOverrides: Partial<SessionPlan> = {}) {
 }
 
 describe('buildSchedule', () => {
-  it('alternates focus and break without a trailing break', () => {
+  it('gives every loop a full focus and break cycle', () => {
     const schedule = buildSchedule(plan());
-    expect(schedule.map((s) => s.phase)).toEqual(['focus', 'break', 'focus']);
+    expect(schedule.map((s) => s.phase)).toEqual(['focus', 'break', 'focus', 'break']);
   });
 
   it('puts prep first when enabled', () => {
@@ -68,12 +68,12 @@ describe('buildSchedule', () => {
 
 describe('totalPlanMinutes', () => {
   it('sums focus and break across loops', () => {
-    // (20 + 10) + 20 — no trailing break.
-    expect(totalPlanMinutes(plan())).toBe(50);
+    // (20 + 10) * 2 — the design totals this plan as a flat hour.
+    expect(totalPlanMinutes(plan())).toBe(60);
   });
 
   it('includes the fixed prep block', () => {
-    expect(totalPlanMinutes(plan({ prepEnabled: true }))).toBe(55);
+    expect(totalPlanMinutes(plan({ prepEnabled: true }))).toBe(65);
   });
 });
 
@@ -184,10 +184,11 @@ describe('timer run', () => {
 
   it('ends the run when skipping the final phase', () => {
     setup().startRun(T0);
-    // Into the last focus phase.
-    useAppStore.getState().tick(T0 + 35 * MIN);
-    useAppStore.getState().skipPhase(T0 + 35 * MIN);
+    // Into the final break, the last phase of the plan.
+    useAppStore.getState().tick(T0 + 52 * MIN);
+    expect(useAppStore.getState().phase).toBe('break');
 
+    useAppStore.getState().skipPhase(T0 + 52 * MIN);
     expect(useAppStore.getState().status).toBe('ended');
   });
 
