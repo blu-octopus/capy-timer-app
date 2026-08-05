@@ -14,6 +14,7 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { colors } from '@/src/theme/tokens';
 
@@ -43,15 +44,20 @@ export default function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <ThemeProvider value={CapyTheme}>
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.white } }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="session-setup" options={{ presentation: 'modal' }} />
-        <Stack.Screen name="stats" />
-        <Stack.Screen name="iap" options={{ presentation: 'transparentModal', animation: 'fade' }} />
-        <Stack.Screen name="+not-found" options={{ headerShown: true }} />
-      </Stack>
-      <StatusBar style="dark" />
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider value={CapyTheme}>
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.white } }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="session-setup" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="stats" />
+          <Stack.Screen
+            name="iap"
+            options={{ presentation: 'transparentModal', animation: 'fade' }}
+          />
+          <Stack.Screen name="+not-found" options={{ headerShown: true }} />
+        </Stack>
+        <StatusBar style="dark" />
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

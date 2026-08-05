@@ -64,7 +64,10 @@ export function WobbleBorder({
   if (!ribbonPath) return null;
 
   return (
-    <View style={[StyleSheet.absoluteFill, { margin: -pad, pointerEvents: 'none' }]}>
+    <View
+      testID="wobble-border"
+      style={[StyleSheet.absoluteFill, { margin: -pad, pointerEvents: 'none' }]}
+    >
       <Svg width={width + pad * 2} height={height + pad * 2}>
         {/* Inset by strokeWidth/2 so the ribbon straddles the box edge, then shifted by the pad. */}
         <G x={pad + strokeWidth / 2} y={pad + strokeWidth / 2}>

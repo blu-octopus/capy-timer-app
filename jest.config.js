@@ -5,6 +5,6 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/$1',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|@react-native-community|@react-navigation|expo|@expo|react-native-reanimated|react-native-gesture-handler)/)',
+    'node_modules/(?!(react-native|@react-native|@react-native-community|@react-navigation|expo|@expo|react-native-reanimated|react-native-gesture-handler|react-native-svg|react-native-safe-area-context)/)',
   ],
 };

@@ -21,7 +21,7 @@ const RADIUS = 10;
  * expands to the 44pt accessibility minimum (capy-ui does this on web with
  * an invisible ::after overlay).
  */
-export function Button({ label, variant = 'filled', disabled, ...rest }: ButtonProps) {
+export function Button({ label, variant = 'filled', disabled, testID, ...rest }: ButtonProps) {
   const { size, onLayout } = useMeasuredSize();
 
   return (
@@ -31,10 +31,15 @@ export function Button({ label, variant = 'filled', disabled, ...rest }: ButtonP
       disabled={disabled}
       hitSlop={(MIN_TOUCH_TARGET - VISUAL_HEIGHT) / 2}
       style={({ pressed }) => [styles.pressable, (pressed || disabled) && styles.dimmed]}
+      testID={testID}
       {...rest}
     >
-      <View onLayout={onLayout} style={[styles.box, styles[variant]]}>
-        {variant === 'outlined' && size.width > 0 && (
+      <View
+        onLayout={onLayout}
+        testID={testID ? `${testID}-box` : undefined}
+        style={[styles.box, styles[variant]]}
+      >
+        {variant === 'outlined' && (
           <WobbleBorder
             width={size.width}
             height={size.height}
@@ -51,9 +56,9 @@ export function Button({ label, variant = 'filled', disabled, ...rest }: ButtonP
 }
 
 const styles = StyleSheet.create({
-  pressable: {
-    alignSelf: 'flex-start',
-  },
+  // No alignSelf here: it would override the parent's alignItems and pin the
+  // button to the start of its container.
+  pressable: {},
   dimmed: {
     opacity: 0.5,
   },
