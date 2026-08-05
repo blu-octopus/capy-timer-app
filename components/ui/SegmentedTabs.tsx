@@ -99,6 +99,9 @@ const styles = StyleSheet.create({
     borderRadius: TRACK_HEIGHT / 2,
     backgroundColor: colors.buttonSecondary,
     alignItems: 'center',
+    // Fill the container unless an explicit width is given; otherwise a
+    // centering parent shrinks the track and crushes the labels together.
+    alignSelf: 'stretch',
   },
   indicator: {
     position: 'absolute',

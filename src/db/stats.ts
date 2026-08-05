@@ -1,4 +1,14 @@
-import type { Category, Session } from './schema';
+import type { Session } from './schema';
+
+/**
+ * The analytics only need a tag's identity and presentation — not when it was
+ * created — so both the database row and the store's cached shape satisfy it.
+ */
+export interface CategoryLike {
+  id: string;
+  name: string;
+  color: string;
+}
 
 export type Timeframe = 'today' | 'week' | 'month' | 'custom';
 
@@ -142,7 +152,7 @@ const UNCATEGORIZED_COLOR = 'grey';
  * Focus time per category, largest first, for the pie chart and the
  * "most common tag" card.
  */
-export function focusByCategory(sessions: Session[], categories: Category[]): CategorySlice[] {
+export function focusByCategory(sessions: Session[], categories: CategoryLike[]): CategorySlice[] {
   const byId = new Map(categories.map((c) => [c.id, c]));
   const totals = new Map<string | null, number>();
 
@@ -181,7 +191,7 @@ export interface StreakRow {
  */
 export function streakMatrix(
   sessions: Session[],
-  categories: Category[],
+  categories: CategoryLike[],
   range: DateRange,
 ): StreakRow[] {
   const dayCount = Math.max(1, Math.round((range.end - range.start) / DAY_MS));
