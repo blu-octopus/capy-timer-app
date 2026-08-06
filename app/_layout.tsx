@@ -17,6 +17,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { useWidgetSync } from '@/hooks/useWidgetSync';
 import { loadCategories } from '@/src/db/categories';
 import { colors } from '@/src/theme/tokens';
 
@@ -47,6 +48,10 @@ export default function RootLayout() {
   useEffect(() => {
     void loadCategories();
   }, []);
+
+  // Mounted at the root, not just the timer screen — widgets must reflect
+  // the current run regardless of which screen is on top.
+  useWidgetSync();
 
   if (!loaded) return null;
 
