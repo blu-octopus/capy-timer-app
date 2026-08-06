@@ -10,7 +10,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.bluoctopus.capytimer"
+      "bundleIdentifier": "com.bluoctopus.capytimer",
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.bluoctopus.capytimer.widgets"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -44,7 +47,37 @@
         {
           "color": "#823D00"
         }
-      ]
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "BatteryWidget",
+              "label": "Capy Battery",
+              "description": "Capybara face + battery level",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "none",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "ClockWidget",
+              "label": "Capy Timer",
+              "description": "Current focus/break phase and time remaining",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "none",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ],
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true
