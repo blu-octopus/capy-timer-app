@@ -17,7 +17,8 @@ history and streaks.
 - **react-native-reanimated** + **react-native-svg** for the hand-drawn design
   system, ported from [capy-ui](https://github.com/blu-octopus/capy-ui) (a web
   component library — the geometry and path data were ported, not imported;
-  see `src/sketch/` and `components/capy/icons/`)
+  see `src/sketch/` and `components/capy/icons/`), and for the companions'
+  mood-reactive animation (see [Companions](#companions))
 - **Jest** + **@testing-library/react-native** for the test suite (component
   tests render through the real React reconciler, not a browser)
 
@@ -86,17 +87,49 @@ No code changes are needed beyond that — `getCoinOfferings()` matches the
 catalogue against whatever the dashboard actually returns, so a product that
 doesn't exist yet is silently omitted rather than shown as a broken tile.
 
+The coin shop also has a **Restore Purchases** button, required by App Store
+review even though these coin packs are consumables with no server-side
+entitlement to restore — it's honest about that ("your balance is saved on
+this device") rather than implying it'll recover a lost purchase.
+
 ## Notifications
 
-The timer schedules **one** local notification for whenever the run's total
-remaining time elapses (not per-phase — the completion screen only appears
-once). This works without any background task machinery: iOS and Android both
-still deliver an already-scheduled local notification even if the app was
+The timer schedules a local notification for **every** upcoming phase
+boundary in the run's schedule (focus → break, break → focus, and final
+completion) the moment the run starts or resumes, not just one at the very
+end. This works without any background task machinery: iOS and Android both
+still deliver already-scheduled local notifications even if the app was
 backgrounded or force-quit, because delivery is owned by the OS, not the app
-process. See `src/notifications/` and `hooks/useSessionNotifications.ts` for
-the full reasoning — including why `expo-task-manager` was evaluated and
-deliberately not used (neither platform lets third-party apps run JS in the
-background at meaningful precision, and this design doesn't need that anyway).
+process. Pausing cancels every pending notification; resuming or skipping
+reschedules only the boundaries still ahead. See `src/notifications/` and
+`hooks/useSessionNotifications.ts` for the full reasoning — including why
+`expo-task-manager` was evaluated and deliberately not used (neither platform
+lets third-party apps run JS in the background at meaningful precision, and
+this design doesn't need that anyway).
+
+## Companions
+
+Coins unlock companion skins — `basic` (unlocked by default), `egg`,
+`fighting`, and `toilet` (see the coin shop / session setup carousel for
+prices). `egg`, `fighting`, and `toilet` render real hand-drawn art per mood
+(idle/paused/celebrating), sourced as pairs of frames exported from Figma and
+looped through a soft crossfade (`components/capy/CrossfadeFrames.tsx`) rather
+than a single static drawing. `basic` currently expresses mood through motion
+only (a breathing/tilt/bounce animation on one drawing) — see
+`components/capy/CapyMascot.tsx`. A fifth skin, `avocado`, has art ready but
+isn't wired into the purchasable roster yet.
+
+The raw per-mood `.svg` frames live in `components/capy/frames/` (see its
+`README.md` for the paste-in convention if you're adding or updating art).
+After changing anything there, regenerate the React Native components:
+
+```bash
+npm run frames
+```
+
+This converts every `.svg` under `components/capy/frames/` into a
+`react-native-svg` TSX component under `components/capy/frames-generated/`
+(regenerated wholesale — don't hand-edit files there).
 
 ## Home screen widgets
 
@@ -176,10 +209,9 @@ chain independent of any browser.
 ## Store submission checklist
 
 - [ ] Apple Developer Program and Google Play Developer accounts
-- [ ] Replace the placeholder app icon, adaptive icon, and splash image in
-      `assets/images/` — these are still the default Expo template graphics
-      (structurally correct sizes: 1024×1024 icon/adaptive/splash, 48×48
-      favicon — just not capybara artwork yet)
+- [x] App icon, adaptive icon, splash image, and favicon in `assets/images/` —
+      generated from the capybara art via `npm run icons`
+      (`scripts/generate-icons.mjs`); re-run after any art tweaks
 - [ ] Set up RevenueCat + store products (see [In-app purchases](#in-app-purchases))
 - [ ] Set `ios.appleTeamId` in `app.json` and confirm the widget extension
       builds via an EAS development build (see [Home screen widgets](#home-screen-widgets))
@@ -194,15 +226,18 @@ chain independent of any browser.
 ## Project structure
 
 ```
-app/               expo-router screens (index = timer, session-setup, stats, iap)
-components/capy/   Ported capy-ui artwork (mascot, coin, icons) + mood animation
-components/ui/     Design system primitives (WobbleBorder, charts, Modal, ...)
-src/store/         Zustand store + the wall-clock timer engine
-src/db/            SQLite schema, repository, and dashboard aggregations
-src/notifications/ Local completion notifications
-src/purchases/     RevenueCat integration
-src/widgets/       Shared snapshot + native bridge for both platforms' widgets
-src/sketch/        Hand-drawn geometry engine, ported verbatim from capy-ui
-src/theme/         Design tokens, typography, chart tick math
-targets/widget/    iOS WidgetKit extension source (@bacons/apple-targets)
+app/                                expo-router screens (index = timer, session-setup, stats, iap)
+components/capy/                    Ported capy-ui artwork (mascot, coin, icons) + companion mood animation
+components/capy/frames/             Raw per-mood/per-frame companion SVGs, paste-in from Figma (see its README.md)
+components/capy/frames-generated/   React Native components generated from frames/ via `npm run frames`
+components/ui/                      Design system primitives (WobbleBorder, charts, Modal, ...)
+src/store/                          Zustand store + the wall-clock timer engine
+src/db/                             SQLite schema, repository, and dashboard aggregations
+src/notifications/                  Per-phase-boundary local notifications
+src/purchases/                      RevenueCat integration
+src/widgets/                        Shared snapshot + native bridge for both platforms' widgets
+src/sketch/                         Hand-drawn geometry engine, ported verbatim from capy-ui
+src/theme/                          Design tokens, typography, chart tick math
+targets/widget/                     iOS WidgetKit extension source (@bacons/apple-targets)
+scripts/                            Codegen: app icons from capy art, companion frame SVG→TSX conversion
 ```
