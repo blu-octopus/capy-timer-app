@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useMemo, useRef, useState } from 'react';
-import { Alert, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Dimensions, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CapyMascot, skinForCompanionId } from '@/components/capy/CapyMascot';
@@ -40,7 +40,10 @@ export default function SessionSetupScreen() {
 
   const initialIndex = Math.max(0, companions.findIndex((c) => c.id === plan.companionId));
   const [index, setIndex] = useState(initialIndex === -1 ? 0 : initialIndex);
-  const [slideWidth, setSlideWidth] = useState(0);
+  // Seeded with a rough estimate rather than 0 — onLayout refines this, but
+  // gating the FlatList's first render on onLayout firing left the carousel
+  // permanently blank in some environments (e.g. web) where it never fires.
+  const [slideWidth, setSlideWidth] = useState(() => Dimensions.get('window').width - 120);
   const carouselRef = useRef<FlatList>(null);
 
   const [picker, setPicker] = useState<PickerKind>(null);
@@ -117,35 +120,33 @@ export default function SessionSetupScreen() {
           />
 
           <View style={styles.slideViewport} onLayout={(e) => setSlideWidth(e.nativeEvent.layout.width)}>
-            {slideWidth > 0 && (
-              <FlatList
-                ref={carouselRef}
-                data={companions}
-                keyExtractor={(c) => c.id}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                initialScrollIndex={index}
-                getItemLayout={(_, i) => ({ length: slideWidth, offset: slideWidth * i, index: i })}
-                onMomentumScrollEnd={(e) => {
-                  const next = Math.round(e.nativeEvent.contentOffset.x / slideWidth);
-                  selectIndex(next);
-                }}
-                renderItem={({ item }) => (
-                  <View style={[styles.slide, { width: slideWidth }]}>
-                    <CapyMascot
-                      size={170}
-                      mood="idle"
-                      skin={skinForCompanionId(item.id)}
-                      locked={!item.unlocked}
-                    />
-                    <Text variant="h1" style={styles.companionName}>
-                      {item.name}
-                    </Text>
-                  </View>
-                )}
-              />
-            )}
+            <FlatList
+              ref={carouselRef}
+              data={companions}
+              keyExtractor={(c) => c.id}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              initialScrollIndex={index}
+              getItemLayout={(_, i) => ({ length: slideWidth, offset: slideWidth * i, index: i })}
+              onMomentumScrollEnd={(e) => {
+                const next = Math.round(e.nativeEvent.contentOffset.x / slideWidth);
+                selectIndex(next);
+              }}
+              renderItem={({ item }) => (
+                <View style={[styles.slide, { width: slideWidth }]}>
+                  <CapyMascot
+                    size={170}
+                    mood="idle"
+                    skin={skinForCompanionId(item.id)}
+                    locked={!item.unlocked}
+                  />
+                  <Text variant="h1" style={styles.companionName}>
+                    {item.name}
+                  </Text>
+                </View>
+              )}
+            />
           </View>
 
           <IconButton
@@ -391,6 +392,10 @@ const styles = StyleSheet.create({
   },
   slideViewport: {
     flex: 1,
+    // Horizontal FlatLists don't self-size their height from content on
+    // react-native-web (unlike native Yoga layout) — without an explicit
+    // height this collapses to 0 and the carousel renders empty.
+    height: 230,
   },
   slide: {
     alignItems: 'center',
