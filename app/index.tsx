@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CapyMascot, type CapyMood } from '@/components/capy/CapyMascot';
+import { CapyMascot, skinForCompanionId, type CapyMood } from '@/components/capy/CapyMascot';
 import { Coin } from '@/components/capy/Coin';
 import { CoinWallet } from '@/components/capy/CoinWallet';
 import { PauseIcon } from '@/components/capy/icons/PauseIcon';
@@ -125,7 +125,7 @@ export default function TimerScreen() {
 
       <View style={styles.body}>
         {isEnded ? (
-          <CompletionState coins={coinsAwarded} />
+          <CompletionState coins={coinsAwarded} companionId={plan.companionId} />
         ) : (
           <>
             <View style={styles.bubbleSlot}>
@@ -136,7 +136,7 @@ export default function TimerScreen() {
               )}
             </View>
 
-            <CapyMascot size={190} mood={mood} />
+            <CapyMascot size={190} mood={mood} skin={skinForCompanionId(plan.companionId)} />
 
             <View style={styles.clockSlot}>
               {!isIdle && <Text variant="caption">{PHASE_LABEL[phase]}</Text>}
@@ -233,7 +233,7 @@ export default function TimerScreen() {
   );
 }
 
-function CompletionState({ coins }: { coins: number }) {
+function CompletionState({ coins, companionId }: { coins: number; companionId: string }) {
   return (
     <>
       <View style={styles.awardSlot}>
@@ -248,7 +248,7 @@ function CompletionState({ coins }: { coins: number }) {
         )}
       </View>
 
-      <CapyMascot size={190} mood="celebrating" />
+      <CapyMascot size={190} mood="celebrating" skin={skinForCompanionId(companionId)} />
 
       <View style={styles.clockSlot}>
         <Text variant="h1" style={styles.congrats}>

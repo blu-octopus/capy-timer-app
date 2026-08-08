@@ -9,6 +9,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { EggCapy } from './EggCapy';
 import { CapyMascotIcon } from './icons/CapyMascotIcon';
 import { LockedIcon } from './icons/LockedIcon';
 
@@ -19,12 +20,28 @@ import { LockedIcon } from './icons/LockedIcon';
  */
 export type CapyMood = 'idle' | 'working' | 'paused' | 'celebrating';
 
+/**
+ * Which companion's art to render. capy-ui only ships the default Capy;
+ * 'fighting' and 'toilet' fall back to it until real art exists for them —
+ * unlocking those still costs coins and marks them owned, they just don't
+ * look different yet. 'egg' is the one hand-authored variant proving the
+ * unlock flow actually changes what you see.
+ */
+export type CapySkin = 'basic' | 'egg' | 'fighting' | 'toilet';
+
+const SKINS: readonly CapySkin[] = ['basic', 'egg', 'fighting', 'toilet'];
+
+/** A companion's `id` is a plain string in the store; an unrecognized one falls back to basic rather than crashing. */
+export function skinForCompanionId(id: string): CapySkin {
+  return (SKINS as readonly string[]).includes(id) ? (id as CapySkin) : 'basic';
+}
+
 export interface CapyMascotProps {
   /** Rendered height; width follows the illustration's aspect ratio. */
   size?: number;
   mood?: CapyMood;
+  skin?: CapySkin;
   locked?: boolean;
-  lockPrice?: number;
 }
 
 const NATURAL_WIDTH = 110;
@@ -34,6 +51,7 @@ const LOCKED_OPACITY = 0.4;
 export function CapyMascot({
   size = NATURAL_HEIGHT,
   mood = 'idle',
+  skin = 'basic',
   locked = false,
 }: CapyMascotProps) {
   const width = (size * NATURAL_WIDTH) / NATURAL_HEIGHT;
@@ -82,7 +100,14 @@ export function CapyMascot({
   return (
     <View style={[styles.container, { width, height: size }]}>
       <Animated.View style={[animatedStyle, locked && styles.dimmed]}>
-        <CapyMascotIcon width={width} height={size} />
+        {skin === 'egg' ? (
+          // Egg Capy is a squarer composition than the full-body mascot —
+          // scaled to roughly the same visual footprint rather than the
+          // same raw height, so it doesn't dwarf the other companions.
+          <EggCapy size={Math.min(width, size) * 1.1} />
+        ) : (
+          <CapyMascotIcon width={width} height={size} />
+        )}
       </Animated.View>
 
       {locked && (

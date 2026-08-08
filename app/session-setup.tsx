@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { CapyMascot } from '@/components/capy/CapyMascot';
+import { CapyMascot, skinForCompanionId } from '@/components/capy/CapyMascot';
 import { Coin } from '@/components/capy/Coin';
 import { CoinWallet } from '@/components/capy/CoinWallet';
 import { BackIcon } from '@/components/capy/icons/BackIcon';
@@ -111,7 +111,12 @@ export default function SessionSetupScreen() {
           />
 
           <View style={styles.slide}>
-            <CapyMascot size={170} mood="idle" locked={!current.unlocked} />
+            <CapyMascot
+              size={170}
+              mood="idle"
+              skin={skinForCompanionId(current.id)}
+              locked={!current.unlocked}
+            />
             <Text variant="h1" style={styles.companionName}>
               {current.name}
             </Text>
