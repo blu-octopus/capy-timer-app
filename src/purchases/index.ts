@@ -105,3 +105,35 @@ export async function purchaseCoins(offering: CoinOffering): Promise<PurchaseRes
     return { outcome: 'error', message };
   }
 }
+
+export type RestoreResult =
+  | { outcome: 'success'; entitlementsRestored: number }
+  | { outcome: 'error'; message: string };
+
+/**
+ * Coin packs are consumables — StoreKit/Play Billing can't restore them,
+ * and the wallet already persists locally, so a fresh install keeps
+ * whatever coins were on that device. This still calls through to
+ * RevenueCat (App Store review expects a working Restore button whenever
+ * IAP exists, and it future-proofs any non-consumable entitlements added
+ * later) and reports how many active entitlements came back, honestly —
+ * today that's reliably zero.
+ */
+export async function restorePurchases(): Promise<RestoreResult> {
+  const status = ensurePurchasesConfigured();
+  if (!status.available) {
+    return { outcome: 'error', message: 'Purchases are not available.' };
+  }
+
+  try {
+    const customerInfo = await Purchases.restorePurchases();
+    return {
+      outcome: 'success',
+      entitlementsRestored: Object.keys(customerInfo.entitlements.active).length,
+    };
+  } catch (error) {
+    console.warn('[purchases] restore failed', error);
+    const message = error instanceof Error ? error.message : 'Restore failed';
+    return { outcome: 'error', message };
+  }
+}
