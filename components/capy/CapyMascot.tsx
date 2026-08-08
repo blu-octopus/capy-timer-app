@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import type { ComponentType } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
@@ -8,12 +9,15 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import type { SvgProps } from 'react-native-svg';
 
-import { EggCapy } from './EggCapy';
-import { FightingCapy } from './FightingCapy';
-import { ToiletCapy } from './ToiletCapy';
+import { CrossfadeFrames } from './CrossfadeFrames';
 import { CapyMascotIcon } from './icons/CapyMascotIcon';
 import { LockedIcon } from './icons/LockedIcon';
+import * as AvocadoFrames from './frames-generated/variations/avocado';
+import * as EggFrames from './frames-generated/variations/egg';
+import * as FightingFrames from './frames-generated/variations/fighting';
+import * as ToiletFrames from './frames-generated/variations/toilet';
 
 /**
  * Mood is expressed through motion rather than separate artwork — capy-ui
@@ -23,13 +27,47 @@ import { LockedIcon } from './icons/LockedIcon';
 export type CapyMood = 'idle' | 'working' | 'paused' | 'celebrating';
 
 /**
- * Which companion's art to render. capy-ui only ships the default Capy, so
- * 'egg', 'fighting' and 'toilet' are hand-authored variants built around
- * the same ported head.
+ * Which companion's art to render. 'basic' is the ported capy-ui mascot;
+ * 'egg', 'fighting', 'toilet' and 'avocado' are self-contained compositions
+ * sourced from the Figma "capy anim" frame library (each a full drawing —
+ * body, costume and head already combined per frame, not layered here).
  */
-export type CapySkin = 'basic' | 'egg' | 'fighting' | 'toilet';
+export type CapySkin = 'basic' | 'egg' | 'fighting' | 'toilet' | 'avocado';
 
-const SKINS: readonly CapySkin[] = ['basic', 'egg', 'fighting', 'toilet'];
+const SKINS: readonly CapySkin[] = ['basic', 'egg', 'fighting', 'toilet', 'avocado'];
+
+/** A companion's mood, mapped to the Figma-named art state (idle/mad/dance) it renders. */
+type FrameState = 'idle' | 'mad' | 'dance';
+
+function frameStateForMood(mood: CapyMood): FrameState {
+  if (mood === 'paused') return 'mad';
+  if (mood === 'celebrating') return 'dance';
+  return 'idle';
+}
+
+interface FrameSet {
+  Idle1: ComponentType<SvgProps>;
+  Idle2: ComponentType<SvgProps>;
+  Mad1?: ComponentType<SvgProps>;
+  Mad2?: ComponentType<SvgProps>;
+  Dance1?: ComponentType<SvgProps>;
+  Dance2?: ComponentType<SvgProps>;
+}
+
+/** Skins with no mad/dance art yet (e.g. Toilet Capy) hold their idle pose regardless of mood. */
+function pickFrames(state: FrameState, frames: FrameSet): readonly [ComponentType<SvgProps>, ComponentType<SvgProps>] {
+  if (state === 'mad' && frames.Mad1 && frames.Mad2) return [frames.Mad1, frames.Mad2];
+  if (state === 'dance' && frames.Dance1 && frames.Dance2) return [frames.Dance1, frames.Dance2];
+  return [frames.Idle1, frames.Idle2];
+}
+
+/** width / height of each skin's Figma frame export, so CrossfadeFrames can size proportionally from a single height prop. */
+const FRAME_ASPECT_RATIO: Record<'avocado' | 'egg' | 'fighting' | 'toilet', number> = {
+  avocado: 234 / 308,
+  egg: 234 / 308,
+  fighting: 115 / 206,
+  toilet: 249 / 276,
+};
 
 /** A companion's `id` is a plain string in the store; an unrecognized one falls back to basic rather than crashing. */
 export function skinForCompanionId(id: string): CapySkin {
@@ -97,18 +135,25 @@ export function CapyMascot({
     transform: [{ translateY: bob.value }, { rotate: `${tilt.value}deg` }],
   }));
 
-  // Egg, Fighting and Toilet are squarer compositions than the full-body
-  // mascot — scaled to roughly the same visual footprint rather than the
-  // same raw height, so none dwarfs the other companions.
+  // Egg, Fighting, Toilet and Avocado are squarer compositions than the
+  // full-body mascot — scaled to roughly the same visual footprint rather
+  // than the same raw height, so none dwarfs the other companions.
   const squareSize = Math.min(width, size) * 1.1;
+  const frameState = frameStateForMood(mood);
 
   let art: React.ReactNode;
-  if (skin === 'egg') {
-    art = <EggCapy size={squareSize} />;
-  } else if (skin === 'fighting') {
-    art = <FightingCapy size={squareSize} />;
-  } else if (skin === 'toilet') {
-    art = <ToiletCapy size={squareSize} />;
+  if (skin === 'egg' || skin === 'fighting' || skin === 'toilet' || skin === 'avocado') {
+    const frames =
+      skin === 'egg' ? EggFrames : skin === 'fighting' ? FightingFrames : skin === 'toilet' ? ToiletFrames : AvocadoFrames;
+    const [FrameA, FrameB] = pickFrames(frameState, frames);
+    art = (
+      <CrossfadeFrames
+        FrameA={FrameA}
+        FrameB={FrameB}
+        height={squareSize}
+        aspectRatio={FRAME_ASPECT_RATIO[skin]}
+      />
+    );
   } else {
     art = <CapyMascotIcon width={width} height={size} />;
   }

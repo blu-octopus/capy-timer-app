@@ -8,7 +8,7 @@ import React from 'react';
 
 import { CapyMascot, skinForCompanionId, type CapySkin } from '@/components/capy/CapyMascot';
 
-const SKINS: CapySkin[] = ['basic', 'egg', 'fighting', 'toilet'];
+const SKINS: CapySkin[] = ['basic', 'egg', 'fighting', 'toilet', 'avocado'];
 
 describe('CapyMascot', () => {
   it.each(SKINS)('renders the %s skin without crashing', (skin) => {
