@@ -9,7 +9,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "test": "jest --passWithNoTests",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "@bacons/apple-targets": "^4.0.7",
