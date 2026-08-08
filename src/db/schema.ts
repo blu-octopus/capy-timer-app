@@ -1,50 +1,46 @@
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-
 /**
- * A user-defined tag applied to sessions ("study", "workout"). Colors are
- * token names from the ColorPicker, not raw hex, so a palette change
- * re-themes existing categories.
+ * Row shapes for the two tables, hand-written to match CREATE_TABLES below.
+ * expo-sqlite has no query builder of its own and drizzle-orm was only ever
+ * used here for its inferred types (repository.ts writes raw SQL), so these
+ * are plain interfaces rather than a drizzle schema — one fewer runtime
+ * dependency for the same type safety.
  */
-export const categories = sqliteTable('categories', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  color: text('color').notNull(),
-  createdAt: integer('created_at').notNull(),
-});
+
+/** A user-defined tag applied to sessions ("study", "workout"). Colors are
+ * token names from the ColorPicker, not raw hex, so a palette change
+ * re-themes existing categories. */
+export interface Category {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: number;
+}
+
+export type NewCategory = Category;
 
 /**
  * One completed or abandoned focus run. Durations are stored in
  * milliseconds actually elapsed, so partial sessions still contribute
  * honest numbers to the dashboard.
  */
-export const sessions = sqliteTable(
-  'sessions',
-  {
-    id: text('id').primaryKey(),
-    startedAt: integer('started_at').notNull(),
-    finishedAt: integer('finished_at'),
-    /** Total duration the plan called for, for planned-vs-actual comparison. */
-    plannedMs: integer('planned_ms').notNull(),
-    focusMs: integer('focus_ms').notNull().default(0),
-    breakMs: integer('break_ms').notNull().default(0),
-    loops: integer('loops').notNull().default(1),
-    categoryId: text('category_id'),
-    companionId: text('companion_id'),
-    coinsEarned: integer('coins_earned').notNull().default(0),
-    /** 1 when the user skipped or ended early; focus/coins reflect time actually worked. */
-    skipped: integer('skipped').notNull().default(0),
-  },
-  (table) => [
-    // Every dashboard query filters by time window first.
-    index('sessions_started_at_idx').on(table.startedAt),
-    index('sessions_category_idx').on(table.categoryId),
-  ],
-);
+export interface Session {
+  id: string;
+  startedAt: number;
+  finishedAt: number | null;
+  /** Total duration the plan called for, for planned-vs-actual comparison. */
+  plannedMs: number;
+  focusMs: number;
+  breakMs: number;
+  loops: number;
+  categoryId: string | null;
+  companionId: string | null;
+  coinsEarned: number;
+  /** 1 when the user skipped or ended early; focus/coins reflect time actually worked. */
+  skipped: number;
+}
 
-export type Category = typeof categories.$inferSelect;
-export type NewCategory = typeof categories.$inferInsert;
-export type Session = typeof sessions.$inferSelect;
-export type NewSession = typeof sessions.$inferInsert;
+export type NewSession = Partial<Session> &
+  Pick<Session, 'id' | 'startedAt' | 'plannedMs'>;
 
 /**
  * Applied on every launch. expo-sqlite has no migration runner of its own,
