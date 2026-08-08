@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { EggCapy } from './EggCapy';
+import { FightingCapy } from './FightingCapy';
 import { CapyMascotIcon } from './icons/CapyMascotIcon';
 import { LockedIcon } from './icons/LockedIcon';
 
@@ -21,11 +22,11 @@ import { LockedIcon } from './icons/LockedIcon';
 export type CapyMood = 'idle' | 'working' | 'paused' | 'celebrating';
 
 /**
- * Which companion's art to render. capy-ui only ships the default Capy;
- * 'fighting' and 'toilet' fall back to it until real art exists for them —
- * unlocking those still costs coins and marks them owned, they just don't
- * look different yet. 'egg' is the one hand-authored variant proving the
- * unlock flow actually changes what you see.
+ * Which companion's art to render. capy-ui only ships the default Capy, so
+ * 'egg' and 'fighting' are hand-authored/user-supplied variants; 'toilet'
+ * still falls back to the default until real art exists for it — unlocking
+ * it still costs coins and marks it owned, it just doesn't look different
+ * yet.
  */
 export type CapySkin = 'basic' | 'egg' | 'fighting' | 'toilet';
 
@@ -97,18 +98,23 @@ export function CapyMascot({
     transform: [{ translateY: bob.value }, { rotate: `${tilt.value}deg` }],
   }));
 
+  // Egg and Fighting are squarer compositions than the full-body mascot —
+  // scaled to roughly the same visual footprint rather than the same raw
+  // height, so neither dwarfs the other companions.
+  const squareSize = Math.min(width, size) * 1.1;
+
+  let art: React.ReactNode;
+  if (skin === 'egg') {
+    art = <EggCapy size={squareSize} />;
+  } else if (skin === 'fighting') {
+    art = <FightingCapy size={squareSize} />;
+  } else {
+    art = <CapyMascotIcon width={width} height={size} />;
+  }
+
   return (
     <View style={[styles.container, { width, height: size }]}>
-      <Animated.View style={[animatedStyle, locked && styles.dimmed]}>
-        {skin === 'egg' ? (
-          // Egg Capy is a squarer composition than the full-body mascot —
-          // scaled to roughly the same visual footprint rather than the
-          // same raw height, so it doesn't dwarf the other companions.
-          <EggCapy size={Math.min(width, size) * 1.1} />
-        ) : (
-          <CapyMascotIcon width={width} height={size} />
-        )}
-      </Animated.View>
+      <Animated.View style={[animatedStyle, locked && styles.dimmed]}>{art}</Animated.View>
 
       {locked && (
         <View style={styles.lockOverlay}>
