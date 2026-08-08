@@ -34,7 +34,6 @@ export default function StatsScreen() {
   const router = useRouter();
   const coins = useAppStore((s) => s.wallet.coins);
   const categories = useAppStore((s) => s.categories);
-  const plan = useAppStore((s) => s.plan);
 
   const [timeframe, setTimeframe] = useState<Timeframe>('today');
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -76,8 +75,8 @@ export default function StatsScreen() {
   );
 
   const topCategory = slices[0];
-  const plannedSessions = Math.max(1, plan.loops);
-  const completionPercent = Math.min(100, (summary.completed / plannedSessions) * 100);
+  // Completion rate within the selected window: finished runs over started.
+  const completionPercent = summary.total === 0 ? 0 : (summary.completed / summary.total) * 100;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -103,7 +102,7 @@ export default function StatsScreen() {
         <View style={styles.cardGrid}>
           <TrendCard
             title="Sessions"
-            stats={[{ value: `${summary.completed}/${plannedSessions}`, unit: 'completed' }]}
+            stats={[{ value: `${summary.completed}/${summary.total}`, unit: 'completed' }]}
             indicator={<ProgressRing value={completionPercent} />}
           />
           <TrendCard
