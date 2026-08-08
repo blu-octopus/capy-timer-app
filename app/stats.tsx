@@ -7,6 +7,7 @@ import { CoinWallet } from '@/components/capy/CoinWallet';
 import { BackIcon } from '@/components/capy/icons/BackIcon';
 import { BarChart } from '@/components/ui/BarChart';
 import { DailyStreaks } from '@/components/ui/DailyStreaks';
+import { DateRangePicker } from '@/components/ui/DateRangePicker';
 import { IconButton } from '@/components/ui/IconButton';
 import { PieChart } from '@/components/ui/PieChart';
 import { ProgressRing } from '@/components/ui/ProgressRing';
@@ -27,6 +28,7 @@ import {
 } from '@/src/db/stats';
 import { useAppStore } from '@/src/store';
 import { colors } from '@/src/theme/tokens';
+import { formatRangeLabel, lastNDaysRange } from '@/src/utils/calendar';
 
 const MIN = 60 * 1000;
 
@@ -38,8 +40,13 @@ export default function StatsScreen() {
   const [timeframe, setTimeframe] = useState<Timeframe>('today');
   const [sessions, setSessions] = useState<Session[]>([]);
   const [weekSessions, setWeekSessions] = useState<Session[]>([]);
+  const [customRange, setCustomRange] = useState(() => lastNDaysRange(7, Date.now()));
+  const [rangePickerOpen, setRangePickerOpen] = useState(false);
 
-  const range = useMemo(() => timeframeRange(timeframe, Date.now()), [timeframe]);
+  const range = useMemo(
+    () => timeframeRange(timeframe, Date.now(), customRange),
+    [timeframe, customRange],
+  );
   // The streak grid always shows the current week, whatever tab is active.
   const weekRange = useMemo(() => timeframeRange('week', Date.now()), []);
 
@@ -94,8 +101,23 @@ export default function StatsScreen() {
             { value: 'custom', label: 'Custom' },
           ]}
           value={timeframe}
-          onChange={setTimeframe}
+          onChange={(next) => {
+            setTimeframe(next);
+            if (next === 'custom') setRangePickerOpen(true);
+          }}
         />
+
+        {timeframe === 'custom' && (
+          <Text
+            variant="caption"
+            style={styles.link}
+            onPress={() => setRangePickerOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Change date range"
+          >
+            {formatRangeLabel(customRange)}
+          </Text>
+        )}
 
         <Text variant="h2">Summary</Text>
 
@@ -163,6 +185,16 @@ export default function StatsScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      <DateRangePicker
+        visible={rangePickerOpen}
+        initialRange={customRange}
+        onDismiss={() => setRangePickerOpen(false)}
+        onConfirm={(next) => {
+          setCustomRange(next);
+          setRangePickerOpen(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
