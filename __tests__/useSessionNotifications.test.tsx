@@ -1,9 +1,8 @@
 /**
- * The scheduled notification must always describe when the *whole run*
- * will finish, not just the current phase, since navigation to the
- * completion screen only happens once. These tests drive the store directly
- * (the same pattern as timer.test.ts) and assert against the mocked
- * expo-notifications calls in jest.setup.js.
+ * One notification per remaining phase boundary, timed from the run's
+ * anchor. These tests drive the store directly (the same pattern as
+ * timer.test.ts) and assert against the mocked expo-notifications calls in
+ * jest.setup.js. Date.now is pinned so anchor-based trigger math is exact.
  */
 
 import { act, renderHook, waitFor } from '@testing-library/react-native';
@@ -11,7 +10,12 @@ import * as Notifications from 'expo-notifications';
 
 import { useSessionNotifications } from '@/hooks/useSessionNotifications';
 import { useAppStore } from '@/src/store';
-import type { SessionPlan } from '@/src/store/types';
+import { buildSchedule, type SessionPlan } from '@/src/store/types';
+
+jest.mock('@/src/db/sessions', () => ({
+  recordSession: jest.fn().mockResolvedValue(undefined),
+  newSessionId: jest.fn(() => 'ses_test'),
+}));
 
 const MIN = 60 * 1000;
 const T0 = 1_800_000_000_000;
@@ -25,6 +29,12 @@ const plan: SessionPlan = {
   companionId: 'basic',
 };
 
+let nowSpy: jest.SpyInstance<number, []>;
+
+function setNow(ts: number) {
+  nowSpy.mockReturnValue(ts);
+}
+
 function setup() {
   useAppStore.setState({
     plan,
@@ -33,73 +43,95 @@ function setup() {
     schedule: [],
     coinsAwarded: 0,
     skipped: false,
+    skippedFocusMs: 0,
+    skippedBreakMs: 0,
   });
 }
 
-function lastScheduledSeconds(): number {
-  const calls = (Notifications.scheduleNotificationAsync as jest.Mock).mock.calls;
-  return calls[calls.length - 1]![0].trigger.seconds;
+function scheduledCalls() {
+  return (Notifications.scheduleNotificationAsync as jest.Mock).mock.calls;
+}
+
+function scheduledSeconds(): number[] {
+  return scheduledCalls().map((call) => call[0].trigger.seconds);
+}
+
+function scheduledTitles(): string[] {
+  return scheduledCalls().map((call) => call[0].content.title);
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
+  nowSpy = jest.spyOn(Date, 'now').mockReturnValue(T0);
   setup();
 });
 
+afterEach(() => {
+  nowSpy.mockRestore();
+});
+
 describe('useSessionNotifications', () => {
-  it('schedules a notification for the full run duration on start', async () => {
+  it('schedules every phase boundary on start, ending with completion', async () => {
     renderHook(() => useSessionNotifications());
 
     act(() => {
       useAppStore.getState().startRun(T0);
     });
 
-    await waitFor(() => expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1));
-    // (20 + 10) * 2 loops = 60 minutes.
-    expect(lastScheduledSeconds()).toBe(60 * 60);
+    await waitFor(() => expect(scheduledCalls()).toHaveLength(4));
+    // Boundaries of a 20/10 × 2 plan: minutes 20, 30, 50, 60.
+    expect(scheduledSeconds()).toEqual([20 * 60, 30 * 60, 50 * 60, 60 * 60]);
+    expect(scheduledTitles()).toEqual([
+      'Focus complete — break time!',
+      "Break's over — back to focus",
+      'Focus complete — break time!',
+      'Session complete!',
+    ]);
   });
 
-  it('cancels the notification while paused and reschedules a shorter one on resume', async () => {
+  it('cancels everything while paused and reschedules shifted boundaries on resume', async () => {
     renderHook(() => useSessionNotifications());
 
     act(() => {
       useAppStore.getState().startRun(T0);
     });
-    await waitFor(() => expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(scheduledCalls()).toHaveLength(4));
 
+    setNow(T0 + 10 * MIN);
     act(() => {
       useAppStore.getState().pause(T0 + 10 * MIN);
     });
     await waitFor(() =>
-      expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith(
-        'mock-notification-id',
-      ),
+      expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledTimes(4),
     );
+    expect(scheduledCalls()).toHaveLength(4);
 
     act(() => {
       useAppStore.getState().resume(T0 + 10 * MIN);
     });
-    await waitFor(() => expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(2));
-    // 60 min total minus the 10 already elapsed before pausing.
-    expect(lastScheduledSeconds()).toBe(50 * 60);
+    await waitFor(() => expect(scheduledCalls()).toHaveLength(8));
+    // Ten minutes gone: boundaries now land at 10, 20, 40, 50 minutes out.
+    expect(scheduledSeconds().slice(4)).toEqual([10 * 60, 20 * 60, 40 * 60, 50 * 60]);
   });
 
-  it('reschedules for the shorter remaining time after a skip', async () => {
+  it('reschedules only the boundaries still ahead after a skip', async () => {
     renderHook(() => useSessionNotifications());
 
     act(() => {
       useAppStore.getState().startRun(T0);
     });
-    await waitFor(() => expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(scheduledCalls()).toHaveLength(4));
 
+    setNow(T0 + 5 * MIN);
     act(() => {
       useAppStore.getState().tick(T0 + 5 * MIN);
       useAppStore.getState().skipPhase(T0 + 5 * MIN);
     });
 
-    await waitFor(() => expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(2));
-    // Skipping from minute 5 straight to the break boundary (minute 20) leaves 40 min.
-    expect(lastScheduledSeconds()).toBe(40 * 60);
+    // Skipping to the break leaves boundaries at 10, 30 and 40 minutes out.
+    await waitFor(() => expect(scheduledCalls()).toHaveLength(7));
+    expect(scheduledSeconds().slice(4)).toEqual([10 * 60, 30 * 60, 40 * 60]);
+    expect(scheduledTitles()[6]).toBe('Session complete!');
   });
 
   it('cancels and does not reschedule once the run ends', async () => {
@@ -108,14 +140,38 @@ describe('useSessionNotifications', () => {
     act(() => {
       useAppStore.getState().startRun(T0);
     });
-    await waitFor(() => expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(scheduledCalls()).toHaveLength(4));
 
     act(() => {
       useAppStore.getState().endRun(T0 + 5 * MIN);
     });
 
-    await waitFor(() => expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalled());
-    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledTimes(4),
+    );
+    expect(scheduledCalls()).toHaveLength(4);
+  });
+
+  it('schedules only future boundaries for a rehydrated mid-run session', async () => {
+    // Cold start: persisted run state reappears with the clock 25 minutes in.
+    setNow(T0 + 25 * MIN);
+    useAppStore.setState({
+      status: 'running',
+      schedule: buildSchedule(plan),
+      anchorTs: T0,
+      startedAt: T0,
+    });
+
+    renderHook(() => useSessionNotifications());
+
+    // Minute-20 boundary is in the past; only 30, 50 and 60 get scheduled.
+    await waitFor(() => expect(scheduledCalls()).toHaveLength(3));
+    expect(scheduledSeconds()).toEqual([5 * 60, 25 * 60, 35 * 60]);
+    expect(scheduledTitles()).toEqual([
+      "Break's over — back to focus",
+      'Focus complete — break time!',
+      'Session complete!',
+    ]);
   });
 
   it('never schedules anything while idle', async () => {
