@@ -69,10 +69,18 @@ states rather than four separate routes; `session-setup.tsx` holds the avatar ca
 category picker, and duration pickers as one modal; `stats.tsx` is the dashboard; `iap.tsx` is
 the coin shop modal.
 
-**Capy art** — all four companion skins (`components/capy/`) are inline `react-native-svg`,
-not image files. `CapyMascotIcon` (basic) and the head used by `EggCapy`/`ToiletCapy` were
-ported from a Figma export; `FightingCapy` and the Toilet Capy porcelain-bowl composition were
-hand-authored for this app (see "Manual follow-ups" for a pending art swap).
+**Capy art** — companion skins (`components/capy/`) are inline `react-native-svg`, not image
+files. `basic` is still the single pre-baked `CapyMascotIcon`, ported from a Figma export, with
+mood expressed purely as motion (see below). `egg`, `fighting`, `toilet` and `avocado` (not yet
+a purchasable companion — see "Manual follow-ups") instead render real per-mood art: each is a
+set of hand-drawn frames exported from Figma (`components/capy/frames/`, raw `.svg`, one file
+per skin/state/frame — see its `README.md` for the paste-in convention), converted to
+`react-native-svg` TSX via `@svgr/cli` into `components/capy/frames-generated/` (generated, not
+hand-edited — rerun the conversion instead of touching these files directly), and looped
+through a 2-frame opacity crossfade
+(`components/capy/CrossfadeFrames.tsx`) driven by mood. Not every skin has art for every state
+(`toilet` is idle-only); `CapyMascot.tsx`'s `pickFrames` falls back to idle when a mood's frames
+don't exist for that skin.
 
 ## Testing strategy
 
@@ -94,8 +102,9 @@ equivalents that were judged more compatible with Expo SDK 54 / new architecture
 already covered by tests:
 
 - **Animations**: Reanimated + hand-drawn SVG state changes, not Lottie. There are no Lottie
-  asset files; capy mood (idle/working/paused/celebrating) is expressed as motion on the same
-  drawing (`components/capy/CapyMascot.tsx`).
+  asset files; capy mood is expressed as motion on a single drawing for the `basic` skin, and
+  as a Reanimated-driven crossfade between hand-drawn frame pairs for the others
+  (`components/capy/CapyMascot.tsx`, `CrossfadeFrames.tsx`).
 - **Charts**: hand-rolled `react-native-svg` (`components/ui/BarChart.tsx`, `PieChart.tsx`,
   etc.), ported from the `/capy-ui` design system's web components, not `victory-native` or
   `react-native-chart-kit`.
@@ -119,10 +128,19 @@ already covered by tests:
   `_ANDROID_KEY`. Until a real project and store products (`capycoins_1000/2000/10000`, see
   `src/purchases/products.ts`) exist, the shop renders its "not set up yet" state — this is
   the correct behavior today, not a bug.
-- **Toilet Capy art**: `components/capy/ToiletCapy.tsx` currently ships a hand-drawn
-  porcelain-bowl composition. You've offered a more detailed reference SVG for this companion;
-  once it's saved to a file (rather than pasted inline — the illustration is too large to
-  relay reliably through chat) it's a straightforward swap.
+- **Basic skin still motion-only**: `egg`/`fighting`/`toilet`/`avocado` render real per-mood
+  Figma frames (see "Capy art" above); `basic` doesn't yet, because wiring its headless `body`
+  frames to the separate `head` frames needs a precise relative offset that doesn't exist in
+  Figma today (the other skins' frames are exported as one already-composed image; `body` was
+  exported standalone). Needs either a combined body+head export or explicit offset numbers
+  before it can be wired the same way.
+- **Avocado isn't purchasable yet**: `CapyMascot` can render the `avocado` skin, but it isn't in
+  `DEFAULT_COMPANIONS` (`src/store/index.ts`) — that needs a name/price decision.
+- **Frame shadows lost their blur**: the SVG→TSX conversion (`@svgr/cli`) drops `<filter>`
+  elements, so shadow/highlight blur on the new frame art was stripped rather than shipped
+  broken (dangling filter references were removed). Shadows render as solid, hard-edged shapes
+  instead of soft ones. `react-native-svg` does support `Filter`/`FeGaussianBlur` natively if
+  this is worth re-adding by hand later.
 - **Widget verification**: the iOS WidgetKit Swift (`targets/widget/CapyWidgets.swift`) has
   never been compiled in this environment. Verify both widgets with an EAS dev build on a real
   device before shipping.
