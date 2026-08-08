@@ -36,6 +36,7 @@ export default function SessionSetupScreen() {
   const companions = useAppStore((s) => s.companions);
   const categories = useAppStore((s) => s.categories);
   const unlockCompanion = useAppStore((s) => s.unlockCompanion);
+  const startRun = useAppStore((s) => s.startRun);
 
   const initialIndex = Math.max(0, companions.findIndex((c) => c.id === plan.companionId));
   const [index, setIndex] = useState(initialIndex === -1 ? 0 : initialIndex);
@@ -226,7 +227,14 @@ export default function SessionSetupScreen() {
           </View>
 
           <View style={styles.startRow}>
-            <Button label="Start Session" variant="outlined" onPress={router.back} />
+            <Button
+              label="Start Session"
+              variant="outlined"
+              onPress={() => {
+                startRun();
+                router.back();
+              }}
+            />
           </View>
         </View>
       </ScrollView>

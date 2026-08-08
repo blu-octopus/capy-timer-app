@@ -12,6 +12,7 @@ import { RestartIcon } from '@/components/capy/icons/RestartIcon';
 import { SkipIcon } from '@/components/capy/icons/SkipIcon';
 import { StatsIcon } from '@/components/capy/icons/StatsIcon';
 import { Button } from '@/components/ui/Button';
+import { swatchColor } from '@/components/ui/ColorPicker';
 import { DialogueBubble } from '@/components/ui/DialogueBubble';
 import { IconButton } from '@/components/ui/IconButton';
 import { Sparks } from '@/components/ui/Sparks';
@@ -197,7 +198,7 @@ export default function TimerScreen() {
         ) : (
           category && (
             <View style={styles.categoryPill}>
-              <View style={[styles.categoryDot, { backgroundColor: category.color }]} />
+              <View style={[styles.categoryDot, { backgroundColor: swatchColor(category.color) }]} />
               <Text variant="caption">{category.name}</Text>
             </View>
           )
