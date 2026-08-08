@@ -4,6 +4,7 @@
  * values — the same path a backgrounded app takes when it wakes up.
  */
 
+import { recordSession } from '@/src/db/sessions';
 import { useAppStore } from '@/src/store';
 import {
   buildSchedule,
@@ -13,6 +14,17 @@ import {
   PREP_MS,
   type SessionPlan,
 } from '@/src/store/types';
+
+jest.mock('@/src/db/sessions', () => ({
+  recordSession: jest.fn().mockResolvedValue(undefined),
+  newSessionId: jest.fn(() => `ses_${Math.random().toString(36).slice(2, 10)}`),
+}));
+
+const recordSessionMock = recordSession as jest.Mock;
+
+beforeEach(() => {
+  recordSessionMock.mockClear();
+});
 
 const MIN = 60 * 1000;
 const T0 = 1_800_000_000_000;
@@ -267,6 +279,108 @@ describe('timer run', () => {
     useAppStore.getState().tick(T0 + 99 * MIN);
     expect(useAppStore.getState().status).toBe('idle');
     expect(useAppStore.getState().elapsedMs).toBe(0);
+  });
+});
+
+describe('run persistence and recovery', () => {
+  it('records the session once, keyed by the run id, with worked durations', () => {
+    setup().startRun(T0);
+    useAppStore.getState().tick(T0 + 60 * MIN);
+
+    expect(recordSessionMock).toHaveBeenCalledTimes(1);
+    const row = recordSessionMock.mock.calls[0]![0];
+    expect(row.id).toBe(useAppStore.getState().runId);
+    expect(row).toMatchObject({
+      startedAt: T0,
+      finishedAt: T0 + 60 * MIN,
+      focusMs: 40 * MIN,
+      breakMs: 20 * MIN,
+      coinsEarned: 40,
+      skipped: 0,
+    });
+  });
+
+  it('backdates finishedAt to the scheduled end when completion is noticed late', () => {
+    setup().startRun(T0);
+    // First tick half an hour after the run actually finished.
+    useAppStore.getState().tick(T0 + 90 * MIN);
+
+    expect(recordSessionMock.mock.calls[0]![0].finishedAt).toBe(T0 + 60 * MIN);
+  });
+
+  it('excludes skipped stretches from the recorded durations', () => {
+    setup().startRun(T0);
+    useAppStore.getState().skipPhase(T0 + 5 * MIN);
+    useAppStore.getState().tick(T0 + 45 * MIN);
+
+    expect(recordSessionMock.mock.calls[0]![0]).toMatchObject({
+      focusMs: 25 * MIN,
+      coinsEarned: 25,
+      skipped: 1,
+    });
+  });
+
+  it('settles a run that finished while the app was dead', () => {
+    setup().startRun(T0);
+
+    // Cold start: persisted 'running' state rehydrates, then reconciles.
+    useAppStore.getState().reconcileAfterRestart(T0 + 90 * MIN);
+
+    const state = useAppStore.getState();
+    expect(state.status).toBe('ended');
+    expect(state.coinsAwarded).toBe(40);
+    expect(state.wallet.coins).toBe(240);
+    expect(recordSessionMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a still-live run untouched on restart', () => {
+    setup().startRun(T0);
+    useAppStore.getState().reconcileAfterRestart(T0 + 10 * MIN);
+
+    expect(useAppStore.getState().status).toBe('running');
+    expect(recordSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps a paused run frozen across restarts', () => {
+    setup().startRun(T0);
+    useAppStore.getState().pause(T0 + 10 * MIN);
+
+    useAppStore.getState().reconcileAfterRestart(T0 + 300 * MIN);
+
+    const state = useAppStore.getState();
+    expect(state.status).toBe('paused');
+    expect(state.elapsedMs).toBe(10 * MIN);
+    expect(recordSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('replays the history write for an ended run without re-awarding coins', () => {
+    setup().startRun(T0);
+    useAppStore.getState().tick(T0 + 60 * MIN);
+    const firstRow = recordSessionMock.mock.calls[0]![0];
+    recordSessionMock.mockClear();
+
+    useAppStore.getState().reconcileAfterRestart(T0 + 61 * MIN);
+
+    expect(useAppStore.getState().wallet.coins).toBe(240);
+    expect(recordSessionMock).toHaveBeenCalledTimes(1);
+    expect(recordSessionMock.mock.calls[0]![0].id).toBe(firstRow.id);
+  });
+
+  it('abandonRun records a skipped run, pays worked focus, and goes idle', () => {
+    setup().startRun(T0);
+    useAppStore.getState().pause(T0 + 7 * MIN);
+    useAppStore.getState().abandonRun(T0 + 9 * MIN);
+
+    const state = useAppStore.getState();
+    expect(state.status).toBe('idle');
+    expect(state.wallet.coins).toBe(207);
+    expect(recordSessionMock).toHaveBeenCalledTimes(1);
+    expect(recordSessionMock.mock.calls[0]![0]).toMatchObject({
+      focusMs: 7 * MIN,
+      coinsEarned: 7,
+      skipped: 1,
+      finishedAt: T0 + 9 * MIN,
+    });
   });
 });
 
