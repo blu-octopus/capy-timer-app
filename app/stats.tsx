@@ -38,8 +38,11 @@ export default function StatsScreen() {
 
   const [timeframe, setTimeframe] = useState<Timeframe>('today');
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [weekSessions, setWeekSessions] = useState<Session[]>([]);
 
   const range = useMemo(() => timeframeRange(timeframe, Date.now()), [timeframe]);
+  // The streak grid always shows the current week, whatever tab is active.
+  const weekRange = useMemo(() => timeframeRange('week', Date.now()), []);
 
   const load = useCallback(async () => {
     try {
@@ -54,6 +57,12 @@ export default function StatsScreen() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    getSessionsInRange(weekRange)
+      .then(setWeekSessions)
+      .catch(() => setWeekSessions([]));
+  }, [weekRange]);
+
   const summary = useMemo(() => summarize(sessions), [sessions]);
   const focus = toHoursMinutes(summary.focusMs);
   const longest = toHoursMinutes(summary.longestMs);
@@ -62,8 +71,8 @@ export default function StatsScreen() {
   const buckets = useMemo(() => hourBuckets(sessions), [sessions]);
   const slices = useMemo(() => focusByCategory(sessions, categories), [sessions, categories]);
   const streaks = useMemo(
-    () => streakMatrix(sessions, categories, timeframeRange('week', Date.now())),
-    [sessions, categories],
+    () => streakMatrix(weekSessions, categories, weekRange),
+    [weekSessions, categories, weekRange],
   );
 
   const topCategory = slices[0];

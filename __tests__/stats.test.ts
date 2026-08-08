@@ -201,6 +201,21 @@ describe('streakMatrix', () => {
     expect(study.checked).toEqual([true, false, true, false, false, false, false]);
   });
 
+  it('lands weekend sessions in the last two columns', () => {
+    const rows = streakMatrix(
+      [
+        // Saturday and Sunday of the same week.
+        session({ id: 'a', startedAt: at('2026-03-14T09:00:00'), categoryId: 'study' }),
+        session({ id: 'b', startedAt: at('2026-03-15T09:00:00'), categoryId: 'study' }),
+      ],
+      categories,
+      range,
+    );
+    expect(rows.find((r) => r.categoryId === 'study')!.checked).toEqual([
+      false, false, false, false, false, true, true,
+    ]);
+  });
+
   it('ignores unfinished and skipped sessions', () => {
     const rows = streakMatrix(
       [

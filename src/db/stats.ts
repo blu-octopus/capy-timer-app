@@ -27,7 +27,7 @@ function startOfDay(ts: number): number {
 
 /**
  * Window for a dashboard tab. Week starts Monday to match the streak grid's
- * M-T-W-T-F columns. `end` is exclusive.
+ * M-through-Sunday columns. `end` is exclusive.
  */
 export function timeframeRange(
   timeframe: Timeframe,
