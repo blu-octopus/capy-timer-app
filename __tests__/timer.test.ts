@@ -182,6 +182,58 @@ describe('timer run', () => {
     expect(state.skipped).toBe(true);
   });
 
+  it('does not pay for focus time jumped over by a skip', () => {
+    setup().startRun(T0);
+    useAppStore.getState().tick(T0 + 5 * MIN);
+
+    // Skip out of the first focus with 15 of its 20 minutes unworked.
+    useAppStore.getState().skipPhase(T0 + 5 * MIN);
+    expect(useAppStore.getState().skippedFocusMs).toBe(15 * MIN);
+
+    // Remaining schedule (10 break + 20 focus + 10 break) runs to the end.
+    useAppStore.getState().tick(T0 + 45 * MIN);
+    const state = useAppStore.getState();
+    expect(state.status).toBe('ended');
+    expect(state.coinsAwarded).toBe(25);
+    expect(state.wallet.coins).toBe(225);
+  });
+
+  it('skipping a break changes no coin math', () => {
+    setup().startRun(T0);
+    useAppStore.getState().tick(T0 + 25 * MIN);
+    expect(useAppStore.getState().phase).toBe('break');
+
+    useAppStore.getState().skipPhase(T0 + 25 * MIN);
+    expect(useAppStore.getState().skippedFocusMs).toBe(0);
+    expect(useAppStore.getState().skippedBreakMs).toBe(5 * MIN);
+
+    useAppStore.getState().tick(T0 + 55 * MIN);
+    const state = useAppStore.getState();
+    expect(state.status).toBe('ended');
+    expect(state.coinsAwarded).toBe(40);
+  });
+
+  it('measures the skip from the wall clock, not the last tick', () => {
+    setup().startRun(T0);
+
+    // No tick since start: elapsedMs is stale at 0, but 7 minutes passed.
+    useAppStore.getState().skipPhase(T0 + 7 * MIN);
+    expect(useAppStore.getState().phase).toBe('break');
+    expect(useAppStore.getState().skippedFocusMs).toBe(13 * MIN);
+  });
+
+  it('pays only worked focus when skipping the final phase ends the run', () => {
+    setup({ breakMin: 0 }).startRun(T0);
+    useAppStore.getState().tick(T0 + 25 * MIN);
+    expect(useAppStore.getState().loopIndex).toBe(1);
+
+    useAppStore.getState().skipPhase(T0 + 25 * MIN);
+    const state = useAppStore.getState();
+    expect(state.status).toBe('ended');
+    expect(state.skipped).toBe(true);
+    expect(state.coinsAwarded).toBe(25);
+  });
+
   it('ends the run when skipping the final phase', () => {
     setup().startRun(T0);
     // Into the final break, the last phase of the plan.

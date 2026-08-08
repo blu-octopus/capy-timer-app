@@ -31,7 +31,7 @@ export const sessions = sqliteTable(
     categoryId: text('category_id'),
     companionId: text('companion_id'),
     coinsEarned: integer('coins_earned').notNull().default(0),
-    /** 1 when the user ended early; partial focus still counts, coins do not. */
+    /** 1 when the user skipped or ended early; focus/coins reflect time actually worked. */
     skipped: integer('skipped').notNull().default(0),
   },
   (table) => [

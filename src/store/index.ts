@@ -46,6 +46,9 @@ interface RunState {
   startedAt: number;
   schedule: PhaseSegment[];
   skipped: boolean;
+  /** Unworked focus/break time jumped over by skips; earns nothing. */
+  skippedFocusMs: number;
+  skippedBreakMs: number;
   coinsAwarded: number;
 }
 
@@ -61,6 +64,8 @@ const IDLE_RUN: RunState = {
   startedAt: 0,
   schedule: [],
   skipped: false,
+  skippedFocusMs: 0,
+  skippedBreakMs: 0,
   coinsAwarded: 0,
 };
 
@@ -149,21 +154,30 @@ export const useAppStore = create<AppState>()(
         const state = get();
         if (state.status !== 'running' && state.status !== 'paused') return;
 
-        const current = resolvePosition(state.schedule, state.elapsedMs).segment;
+        const elapsedMs = state.status === 'paused' ? state.elapsedMs : elapsedAt(state, now);
+        const current = resolvePosition(state.schedule, elapsedMs).segment;
         if (!current) return;
 
         const nextOffset = current.offsetMs + current.durationMs;
         const isLast = nextOffset >= totalPlanMs(state.plan);
 
         if (isLast) {
+          // endRun resolves position from real elapsed time, which already
+          // excludes the unworked tail of this phase — no accumulation needed.
+          set({ skipped: true });
           get().endRun(now);
           return;
         }
 
+        // Jumping the clock forward makes the schedule position count the
+        // whole phase as done; track the unworked part so it earns nothing.
+        const unworkedMs = Math.max(0, nextOffset - elapsedMs);
         set({
           ...applyPosition(state, nextOffset),
           anchorTs: now - nextOffset,
           skipped: true,
+          skippedFocusMs: state.skippedFocusMs + (current.phase === 'focus' ? unworkedMs : 0),
+          skippedBreakMs: state.skippedBreakMs + (current.phase === 'break' ? unworkedMs : 0),
           status: state.status,
         });
       },
@@ -174,8 +188,11 @@ export const useAppStore = create<AppState>()(
 
         const elapsedMs = state.status === 'paused' ? state.elapsedMs : elapsedAt(state, now);
         const position = resolvePosition(state.schedule, elapsedMs);
-        // Ending early still pays for focus minutes already worked.
-        const coins = coinsForFocusMs(position.focusMsCompleted);
+        // Ending early still pays for focus minutes already worked, but
+        // never for focus time that was skipped over.
+        const coins = coinsForFocusMs(
+          Math.max(0, position.focusMsCompleted - state.skippedFocusMs),
+        );
 
         set((s) => ({
           status: 'ended',
