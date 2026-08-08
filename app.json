@@ -1,22 +1,27 @@
 {
   "expo": {
-    "name": "capy-timer",
+    "name": "Capy Timer",
     "slug": "capy-timer",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "capytimer",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bluoctopus.capytimer",
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.com.bluoctopus.capytimer.widgets"]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.bluoctopus.capytimer"
     },
     "web": {
       "bundler": "metro",
@@ -33,7 +38,46 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-web-browser",
+      "expo-sqlite",
+      [
+        "expo-notifications",
+        {
+          "color": "#823D00"
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "BatteryWidget",
+              "label": "Capy Battery",
+              "description": "Capybara face + battery level",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "none",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "ClockWidget",
+              "label": "Capy Timer",
+              "description": "Current focus/break phase and time remaining",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "none",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ],
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true

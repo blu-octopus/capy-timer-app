@@ -1,37 +1,75 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
+import {
+  MPLUSRounded1c_300Light,
+  MPLUSRounded1c_400Regular,
+  MPLUSRounded1c_700Bold,
+} from '@expo-google-fonts/m-plus-rounded-1c';
+import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
+import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { useWidgetSync } from '@/hooks/useWidgetSync';
+import { loadCategories } from '@/src/db/categories';
+import { colors } from '@/src/theme/tokens';
+
+// Design is light-only (capy-ui has no dark tokens).
+const CapyTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: colors.white,
+    card: colors.white,
+    text: colors.black,
+    primary: colors.brown,
+  },
+};
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   const [loaded] = useFonts({
-    // Inter font family
-    'Inter_18pt-Regular': require('../assets/fonts/Inter/static/Inter_18pt-Regular.ttf'),
-    'Inter_18pt-Medium': require('../assets/fonts/Inter/static/Inter_18pt-Medium.ttf'),
-    'Inter_18pt-SemiBold': require('../assets/fonts/Inter/static/Inter_18pt-SemiBold.ttf'),
-    'Inter_18pt-Bold': require('../assets/fonts/Inter/static/Inter_18pt-Bold.ttf'),
-    'Inter_18pt-Light': require('../assets/fonts/Inter/static/Inter_18pt-Light.ttf'),
-    
-    // Keep SpaceMono for fallback
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    MPLUSRounded1c_300Light,
+    MPLUSRounded1c_400Regular,
+    MPLUSRounded1c_700Bold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
   });
 
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null;
-  }
+  // Categories live in SQLite; hydrate the store cache once at startup.
+  useEffect(() => {
+    void loadCategories();
+  }, []);
+
+  // Mounted at the root, not just the timer screen — widgets must reflect
+  // the current run regardless of which screen is on top.
+  useWidgetSync();
+
+  if (!loaded) return null;
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider value={CapyTheme}>
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.white } }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="session-setup" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="stats" />
+          <Stack.Screen
+            name="iap"
+            options={{ presentation: 'transparentModal', animation: 'fade' }}
+          />
+          <Stack.Screen name="+not-found" options={{ headerShown: true }} />
+        </Stack>
+        <StatusBar style="dark" />
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
