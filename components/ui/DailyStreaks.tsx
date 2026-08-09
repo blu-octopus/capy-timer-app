@@ -22,7 +22,7 @@ const CELL_WIDTH = 24;
 /** Stateless — the parent owns `rows` and mirrors `onToggle` back in. */
 export function DailyStreaks({
   heading = 'Streaks',
-  days = ['M', 'T', 'W', 'T', 'F'],
+  days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'],
   rows,
   onToggle,
 }: DailyStreaksProps) {

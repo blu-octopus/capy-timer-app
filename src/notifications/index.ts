@@ -1,12 +1,14 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+import type { PhaseSegment } from '../store/types';
+
 /**
- * Local-only: this schedules a device notification for when the current
- * run's total remaining time elapses, so the user is told the session
- * finished even if the app is backgrounded. It does not touch push tokens —
- * remote push isn't part of this feature and (as of SDK 53+) isn't
- * available in Expo Go anyway.
+ * Local-only: schedules one device notification per phase boundary of the
+ * current run (focus→break, break→focus, and the final completion), so the
+ * user is guided through the whole session even with the app backgrounded.
+ * It does not touch push tokens — remote push isn't part of this feature
+ * and (as of SDK 53+) isn't available in Expo Go anyway.
  */
 
 Notifications.setNotificationHandler({
@@ -42,33 +44,80 @@ export async function ensureNotificationPermission(): Promise<boolean> {
   return request.granted;
 }
 
-export async function scheduleSessionNotification(remainingMs: number): Promise<string | null> {
+/** What to say when `segment` ends and `next` (if any) begins. */
+function boundaryContent(
+  segment: PhaseSegment,
+  next: PhaseSegment | undefined,
+): { title: string; body: string } {
+  if (!next) {
+    return {
+      title: 'Session complete!',
+      body: 'Your capybara did it — come see your reward.',
+    };
+  }
+  if (next.phase === 'break') {
+    return {
+      title: 'Focus complete — break time!',
+      body: 'Your capybara says stretch those paws.',
+    };
+  }
+  if (segment.phase === 'prep') {
+    return {
+      title: 'Prep is done — time to focus',
+      body: 'Your capybara is settling in to work.',
+    };
+  }
+  return {
+    title: "Break's over — back to focus",
+    body: 'Your capybara is ready for another round.',
+  };
+}
+
+/**
+ * Schedules one notification per boundary still in the future, measured from
+ * the run's anchor so the trigger times are exact regardless of when the
+ * last tick happened. Returns the ids scheduled so far even if a call fails
+ * partway, so the caller can always cancel what did land. Worst case is
+ * 2×9 loops + prep ≈ 19 pending, well under iOS's 64-notification cap.
+ */
+export async function scheduleRunNotifications(
+  schedule: PhaseSegment[],
+  anchorTs: number,
+  now: number = Date.now(),
+): Promise<string[]> {
+  const ids: string[] = [];
   try {
     await ensureAndroidChannel();
-    return await Notifications.scheduleNotificationAsync({
-      content: {
-        title: 'Session complete!',
-        body: 'Your capybara did it — come see your reward.',
-        sound: true,
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: Math.max(1, Math.round(remainingMs / 1000)),
-        repeats: false,
-      },
-    });
+
+    for (let i = 0; i < schedule.length; i++) {
+      const segment = schedule[i]!;
+      const secondsUntil = (anchorTs + segment.offsetMs + segment.durationMs - now) / 1000;
+      if (secondsUntil <= 0) continue;
+
+      ids.push(
+        await Notifications.scheduleNotificationAsync({
+          content: { ...boundaryContent(segment, schedule[i + 1]), sound: true },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: Math.max(1, Math.round(secondsUntil)),
+            repeats: false,
+          },
+        }),
+      );
+    }
   } catch (error) {
     // A failed schedule should never block starting or resuming a session.
     console.warn('[notifications] schedule failed', error);
-    return null;
   }
+  return ids;
 }
 
-export async function cancelSessionNotification(id: string | null): Promise<void> {
-  if (!id) return;
-  try {
-    await Notifications.cancelScheduledNotificationAsync(id);
-  } catch {
-    // Already fired or already cancelled — nothing to do.
+export async function cancelRunNotifications(ids: string[]): Promise<void> {
+  for (const id of ids) {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(id);
+    } catch {
+      // Already fired or already cancelled — nothing to do.
+    }
   }
 }

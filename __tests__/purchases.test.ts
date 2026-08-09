@@ -13,6 +13,7 @@ import {
   getCoinOfferings,
   purchaseCoins,
   resetPurchasesStatusForTests,
+  restorePurchases,
 } from '@/src/purchases';
 
 jest.mock('react-native-purchases', () => ({
@@ -21,6 +22,7 @@ jest.mock('react-native-purchases', () => ({
     configure: jest.fn(),
     getOfferings: jest.fn(),
     purchasePackage: jest.fn(),
+    restorePurchases: jest.fn(),
   },
   PURCHASES_ERROR_CODE: { PURCHASE_CANCELLED_ERROR: '1' },
 }));
@@ -28,6 +30,7 @@ jest.mock('react-native-purchases', () => ({
 const mockedConfigure = Purchases.configure as jest.Mock;
 const mockedGetOfferings = Purchases.getOfferings as jest.Mock;
 const mockedPurchasePackage = Purchases.purchasePackage as jest.Mock;
+const mockedRestorePurchases = Purchases.restorePurchases as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -135,6 +138,45 @@ describe('purchaseCoins', () => {
     expect(await purchaseCoins(offering)).toEqual({
       outcome: 'error',
       message: 'Payment declined',
+    });
+  });
+});
+
+describe('restorePurchases', () => {
+  it('reports an error without calling the SDK when purchases are unavailable', async () => {
+    expect(await restorePurchases()).toEqual({
+      outcome: 'error',
+      message: 'Purchases are not available.',
+    });
+    expect(mockedRestorePurchases).not.toHaveBeenCalled();
+  });
+
+  it('reports zero restored entitlements honestly — coin packs are consumables', async () => {
+    process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY = 'test-key';
+    mockedConfigure.mockImplementation(() => undefined);
+    mockedRestorePurchases.mockResolvedValue({ entitlements: { active: {} } });
+
+    expect(await restorePurchases()).toEqual({ outcome: 'success', entitlementsRestored: 0 });
+  });
+
+  it('counts active entitlements when the SDK does find some', async () => {
+    process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY = 'test-key';
+    mockedConfigure.mockImplementation(() => undefined);
+    mockedRestorePurchases.mockResolvedValue({
+      entitlements: { active: { pro: {}, extra: {} } },
+    });
+
+    expect(await restorePurchases()).toEqual({ outcome: 'success', entitlementsRestored: 2 });
+  });
+
+  it('surfaces a failure message when the restore call itself fails', async () => {
+    process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY = 'test-key';
+    mockedConfigure.mockImplementation(() => undefined);
+    mockedRestorePurchases.mockRejectedValue(new Error('Network unreachable'));
+
+    expect(await restorePurchases()).toEqual({
+      outcome: 'error',
+      message: 'Network unreachable',
     });
   });
 });

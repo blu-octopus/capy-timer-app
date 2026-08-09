@@ -24,17 +24,20 @@ jest.mock('@/src/purchases', () => ({
   ensurePurchasesConfigured: jest.fn(),
   getCoinOfferings: jest.fn(),
   purchaseCoins: jest.fn(),
+  restorePurchases: jest.fn(),
 }));
 
 import {
   ensurePurchasesConfigured,
   getCoinOfferings,
   purchaseCoins,
+  restorePurchases,
 } from '@/src/purchases';
 
 const mockedEnsure = ensurePurchasesConfigured as jest.Mock;
 const mockedGetOfferings = getCoinOfferings as jest.Mock;
 const mockedPurchase = purchaseCoins as jest.Mock;
+const mockedRestore = restorePurchases as jest.Mock;
 
 const offering = {
   product: { id: 'capycoins_1000', coins: 1000 },
@@ -134,5 +137,67 @@ describe('IapScreen', () => {
       expect(Alert.alert).toHaveBeenCalledWith('Purchase failed', 'Card declined'),
     );
     expect(useAppStore.getState().wallet.coins).toBe(200);
+  });
+
+  it('hides the Restore Purchases button while the shop is unavailable', async () => {
+    mockedEnsure.mockReturnValue({ available: false, reason: 'missing-api-key' });
+
+    render(<IapScreen />);
+
+    await waitFor(() => expect(screen.getByText(/coin shop isn't set up yet/i)).toBeTruthy());
+    expect(screen.queryByText('Restore Purchases')).toBeNull();
+  });
+
+  it('tells the user honestly that consumables have nothing to restore', async () => {
+    mockedEnsure.mockReturnValue({ available: true });
+    mockedGetOfferings.mockResolvedValue([offering]);
+    mockedRestore.mockResolvedValue({ outcome: 'success', entitlementsRestored: 0 });
+
+    render(<IapScreen />);
+    await waitFor(() => expect(screen.getByText('1,000')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Restore Purchases'));
+    });
+
+    await waitFor(() => expect(mockedRestore).toHaveBeenCalled());
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Nothing to restore',
+      expect.stringContaining('one-time purchases'),
+    );
+  });
+
+  it('confirms when the restore actually finds active entitlements', async () => {
+    mockedEnsure.mockReturnValue({ available: true });
+    mockedGetOfferings.mockResolvedValue([offering]);
+    mockedRestore.mockResolvedValue({ outcome: 'success', entitlementsRestored: 1 });
+
+    render(<IapScreen />);
+    await waitFor(() => expect(screen.getByText('1,000')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Restore Purchases'));
+    });
+
+    await waitFor(() =>
+      expect(Alert.alert).toHaveBeenCalledWith('Purchases restored', expect.any(String)),
+    );
+  });
+
+  it('surfaces a restore failure without crashing', async () => {
+    mockedEnsure.mockReturnValue({ available: true });
+    mockedGetOfferings.mockResolvedValue([offering]);
+    mockedRestore.mockResolvedValue({ outcome: 'error', message: 'Network unreachable' });
+
+    render(<IapScreen />);
+    await waitFor(() => expect(screen.getByText('1,000')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByText('Restore Purchases'));
+    });
+
+    await waitFor(() =>
+      expect(Alert.alert).toHaveBeenCalledWith('Restore failed', 'Network unreachable'),
+    );
   });
 });

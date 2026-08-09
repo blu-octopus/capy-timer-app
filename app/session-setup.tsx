@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useMemo, useRef, useState } from 'react';
+import { Alert, Dimensions, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CapyMascot, skinForCompanionId } from '@/components/capy/CapyMascot';
@@ -36,9 +36,15 @@ export default function SessionSetupScreen() {
   const companions = useAppStore((s) => s.companions);
   const categories = useAppStore((s) => s.categories);
   const unlockCompanion = useAppStore((s) => s.unlockCompanion);
+  const startRun = useAppStore((s) => s.startRun);
 
   const initialIndex = Math.max(0, companions.findIndex((c) => c.id === plan.companionId));
   const [index, setIndex] = useState(initialIndex === -1 ? 0 : initialIndex);
+  // Seeded with a rough estimate rather than 0 — onLayout refines this, but
+  // gating the FlatList's first render on onLayout firing left the carousel
+  // permanently blank in some environments (e.g. web) where it never fires.
+  const [slideWidth, setSlideWidth] = useState(() => Dimensions.get('window').width - 120);
+  const carouselRef = useRef<FlatList>(null);
 
   const [picker, setPicker] = useState<PickerKind>(null);
   const [categoryModal, setCategoryModal] = useState(false);
@@ -48,12 +54,13 @@ export default function SessionSetupScreen() {
   const current = companions[index] ?? companions[0]!;
   const totalMinutes = useMemo(() => totalPlanMinutes(plan), [plan]);
 
-  const selectIndex = (next: number) => {
+  const selectIndex = (next: number, scroll = false) => {
     if (next < 0 || next >= companions.length) return;
     setIndex(next);
     // Only adopt an unlocked buddy; locked ones stay a preview.
     const companion = companions[next];
     if (companion?.unlocked) updatePlan({ companionId: companion.id });
+    if (scroll) carouselRef.current?.scrollToIndex({ index: next, animated: true });
   };
 
   const onUnlock = () => {
@@ -99,27 +106,47 @@ export default function SessionSetupScreen() {
           {index + 1}/{companions.length}
         </Text>
 
-        {/* Arrows rather than a paged scroller: a horizontal ScrollView nested
-            in a vertical one fights for the pan gesture on native. */}
+        {/* Swipeable via FlatList paging; arrows stay as an affordance and
+            for accessibility, driving the same scrollToIndex. Orthogonal-axis
+            nesting (horizontal list in a vertical scroll view) is the
+            standard, well-supported case — no custom gesture handling needed. */}
         <View style={styles.carousel}>
           <IconButton
             icon={BackIcon}
             size={20}
             accessibilityLabel="Previous buddy"
             disabled={index === 0}
-            onPress={() => selectIndex(index - 1)}
+            onPress={() => selectIndex(index - 1, true)}
           />
 
-          <View style={styles.slide}>
-            <CapyMascot
-              size={170}
-              mood="idle"
-              skin={skinForCompanionId(current.id)}
-              locked={!current.unlocked}
+          <View style={styles.slideViewport} onLayout={(e) => setSlideWidth(e.nativeEvent.layout.width)}>
+            <FlatList
+              ref={carouselRef}
+              data={companions}
+              keyExtractor={(c) => c.id}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              initialScrollIndex={index}
+              getItemLayout={(_, i) => ({ length: slideWidth, offset: slideWidth * i, index: i })}
+              onMomentumScrollEnd={(e) => {
+                const next = Math.round(e.nativeEvent.contentOffset.x / slideWidth);
+                selectIndex(next);
+              }}
+              renderItem={({ item }) => (
+                <View style={[styles.slide, { width: slideWidth }]}>
+                  <CapyMascot
+                    size={170}
+                    mood="idle"
+                    skin={skinForCompanionId(item.id)}
+                    locked={!item.unlocked}
+                  />
+                  <Text variant="h1" style={styles.companionName}>
+                    {item.name}
+                  </Text>
+                </View>
+              )}
             />
-            <Text variant="h1" style={styles.companionName}>
-              {current.name}
-            </Text>
           </View>
 
           <IconButton
@@ -127,7 +154,7 @@ export default function SessionSetupScreen() {
             size={20}
             accessibilityLabel="Next buddy"
             disabled={index === companions.length - 1}
-            onPress={() => selectIndex(index + 1)}
+            onPress={() => selectIndex(index + 1, true)}
           />
         </View>
 
@@ -226,7 +253,14 @@ export default function SessionSetupScreen() {
           </View>
 
           <View style={styles.startRow}>
-            <Button label="Start Session" variant="outlined" onPress={router.back} />
+            <Button
+              label="Start Session"
+              variant="outlined"
+              onPress={() => {
+                startRun();
+                router.back();
+              }}
+            />
           </View>
         </View>
       </ScrollView>
@@ -356,8 +390,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
   },
-  slide: {
+  slideViewport: {
     flex: 1,
+    // Horizontal FlatLists don't self-size their height from content on
+    // react-native-web (unlike native Yoga layout) — without an explicit
+    // height this collapses to 0 and the carousel renders empty.
+    height: 230,
+  },
+  slide: {
     alignItems: 'center',
     gap: 8,
     paddingVertical: 8,

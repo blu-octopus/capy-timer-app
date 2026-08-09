@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
+import { newSessionId, recordSession } from '../db/sessions';
+import type { NewSession } from '../db/schema';
 import {
   buildSchedule,
   coinsForFocusMs,
@@ -33,6 +35,8 @@ const DEFAULT_PLAN: SessionPlan = {
 };
 
 interface RunState {
+  /** History-row id for this run, minted at start so recording is idempotent. */
+  runId: string | null;
   status: RunStatus;
   phase: RunPhase;
   loopIndex: number;
@@ -44,12 +48,18 @@ interface RunState {
   /** Wall-clock anchor: run start shifted forward by total paused time. */
   anchorTs: number;
   startedAt: number;
+  /** Wall-clock time the run ended; 0 until then. */
+  finishedAt: number;
   schedule: PhaseSegment[];
   skipped: boolean;
+  /** Unworked focus/break time jumped over by skips; earns nothing. */
+  skippedFocusMs: number;
+  skippedBreakMs: number;
   coinsAwarded: number;
 }
 
 const IDLE_RUN: RunState = {
+  runId: null,
   status: 'idle',
   phase: 'focus',
   loopIndex: 0,
@@ -59,8 +69,11 @@ const IDLE_RUN: RunState = {
   breakMsCompleted: 0,
   anchorTs: 0,
   startedAt: 0,
+  finishedAt: 0,
   schedule: [],
   skipped: false,
+  skippedFocusMs: 0,
+  skippedBreakMs: 0,
   coinsAwarded: 0,
 };
 
@@ -79,9 +92,13 @@ export interface AppState extends RunState {
   /** Jump to the next phase, or end the run if this was the last. */
   skipPhase: (now?: number) => void;
   endRun: (now?: number) => void;
+  /** Finalize an in-progress run without celebration: record it, pay worked focus, go idle. */
+  abandonRun: (now?: number) => void;
   reset: () => void;
   /** Reconciles state against the wall clock; safe to call at any cadence. */
   tick: (now?: number) => void;
+  /** Settles a rehydrated run against the clock after a cold start. */
+  reconcileAfterRestart: (now?: number) => void;
 
   addCoins: (amount: number) => void;
   unlockCompanion: (id: string) => boolean;
@@ -91,6 +108,27 @@ export interface AppState extends RunState {
 /** Milliseconds of run progress at time `now`, given the anchor. */
 function elapsedAt(state: RunState, now: number): number {
   return Math.max(0, now - state.anchorTs);
+}
+
+/**
+ * The history row for an ended run, derived entirely from persisted state so
+ * it can be (re)built after a cold start. Durations are time actually
+ * worked — skipped-over stretches are excluded.
+ */
+function sessionRecordFrom(state: AppState): NewSession {
+  return {
+    id: state.runId ?? newSessionId(),
+    startedAt: state.startedAt,
+    finishedAt: state.finishedAt || null,
+    plannedMs: state.schedule.reduce((sum, s) => sum + s.durationMs, 0),
+    focusMs: Math.max(0, state.focusMsCompleted - state.skippedFocusMs),
+    breakMs: Math.max(0, state.breakMsCompleted - state.skippedBreakMs),
+    loops: state.plan.loops,
+    categoryId: state.plan.categoryId ?? null,
+    companionId: state.plan.companionId,
+    coinsEarned: state.coinsAwarded,
+    skipped: state.skipped ? 1 : 0,
+  };
 }
 
 function applyPosition(state: RunState, elapsedMs: number): Partial<RunState> {
@@ -124,6 +162,7 @@ export const useAppStore = create<AppState>()(
         const schedule = buildSchedule(plan);
         set({
           ...IDLE_RUN,
+          runId: newSessionId(),
           schedule,
           status: 'running',
           phase: schedule[0]?.phase ?? 'focus',
@@ -149,21 +188,30 @@ export const useAppStore = create<AppState>()(
         const state = get();
         if (state.status !== 'running' && state.status !== 'paused') return;
 
-        const current = resolvePosition(state.schedule, state.elapsedMs).segment;
+        const elapsedMs = state.status === 'paused' ? state.elapsedMs : elapsedAt(state, now);
+        const current = resolvePosition(state.schedule, elapsedMs).segment;
         if (!current) return;
 
         const nextOffset = current.offsetMs + current.durationMs;
         const isLast = nextOffset >= totalPlanMs(state.plan);
 
         if (isLast) {
+          // endRun resolves position from real elapsed time, which already
+          // excludes the unworked tail of this phase — no accumulation needed.
+          set({ skipped: true });
           get().endRun(now);
           return;
         }
 
+        // Jumping the clock forward makes the schedule position count the
+        // whole phase as done; track the unworked part so it earns nothing.
+        const unworkedMs = Math.max(0, nextOffset - elapsedMs);
         set({
           ...applyPosition(state, nextOffset),
           anchorTs: now - nextOffset,
           skipped: true,
+          skippedFocusMs: state.skippedFocusMs + (current.phase === 'focus' ? unworkedMs : 0),
+          skippedBreakMs: state.skippedBreakMs + (current.phase === 'break' ? unworkedMs : 0),
           status: state.status,
         });
       },
@@ -174,8 +222,16 @@ export const useAppStore = create<AppState>()(
 
         const elapsedMs = state.status === 'paused' ? state.elapsedMs : elapsedAt(state, now);
         const position = resolvePosition(state.schedule, elapsedMs);
-        // Ending early still pays for focus minutes already worked.
-        const coins = coinsForFocusMs(position.focusMsCompleted);
+        // Ending early still pays for focus minutes already worked, but
+        // never for focus time that was skipped over.
+        const coins = coinsForFocusMs(
+          Math.max(0, position.focusMsCompleted - state.skippedFocusMs),
+        );
+
+        // A run that completed in the background ended at its scheduled end,
+        // not when the app woke up. A paused run ends when abandoned.
+        const scheduleEndTs = state.anchorTs + state.schedule.reduce((s, seg) => s + seg.durationMs, 0);
+        const finishedAt = state.status === 'running' ? Math.min(now, scheduleEndTs) : now;
 
         set((s) => ({
           status: 'ended',
@@ -183,9 +239,23 @@ export const useAppStore = create<AppState>()(
           msInPhase: position.msInPhase,
           focusMsCompleted: position.focusMsCompleted,
           breakMsCompleted: position.breakMsCompleted,
+          finishedAt,
           coinsAwarded: coins,
           wallet: { coins: s.wallet.coins + coins },
         }));
+
+        // Fire-and-forget: recordSession never throws, and the runId-keyed
+        // INSERT OR IGNORE makes a later retry (or replay) a no-op.
+        void recordSession(sessionRecordFrom(get()));
+      },
+
+      abandonRun: (now = Date.now()) => {
+        const state = get();
+        if (state.status !== 'running' && state.status !== 'paused') return;
+
+        set({ skipped: true });
+        get().endRun(now);
+        set({ ...IDLE_RUN });
       },
 
       reset: () => set({ ...IDLE_RUN }),
@@ -203,6 +273,25 @@ export const useAppStore = create<AppState>()(
         }
 
         set(applyPosition(state, elapsedMs));
+      },
+
+      reconcileAfterRestart: (now = Date.now()) => {
+        const state = get();
+
+        if (state.status === 'running') {
+          // Finished while the app was dead: settle up (coins + history row).
+          // Otherwise the ticker resumes the live run untouched.
+          if (resolvePosition(state.schedule, elapsedAt(state, now)).finished) {
+            get().endRun(now);
+          }
+          return;
+        }
+
+        // Died between awarding coins and the DB write landing; replaying
+        // the runId-keyed insert is a no-op when the row already exists.
+        if (state.status === 'ended' && state.runId) {
+          void recordSession(sessionRecordFrom(state));
+        }
       },
 
       addCoins: (amount) =>
@@ -230,14 +319,35 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'capy-timer-store',
+      version: 1,
       storage: createJSONStorage(() => AsyncStorage),
-      // Run state is wall-clock derived and meaningless after a cold start.
+      // The run slice is all absolute timestamps and durations, so a
+      // rehydrated run lands exactly where the wall clock says it should.
       // Categories are owned by SQLite and reloaded on launch.
       partialize: (state) => ({
         plan: state.plan,
         wallet: state.wallet,
         companions: state.companions,
+        runId: state.runId,
+        status: state.status,
+        phase: state.phase,
+        loopIndex: state.loopIndex,
+        msInPhase: state.msInPhase,
+        elapsedMs: state.elapsedMs,
+        focusMsCompleted: state.focusMsCompleted,
+        breakMsCompleted: state.breakMsCompleted,
+        anchorTs: state.anchorTs,
+        startedAt: state.startedAt,
+        finishedAt: state.finishedAt,
+        schedule: state.schedule,
+        skipped: state.skipped,
+        skippedFocusMs: state.skippedFocusMs,
+        skippedBreakMs: state.skippedBreakMs,
+        coinsAwarded: state.coinsAwarded,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.reconcileAfterRestart();
+      },
     },
   ),
 );

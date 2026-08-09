@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,6 +12,7 @@ import { RestartIcon } from '@/components/capy/icons/RestartIcon';
 import { SkipIcon } from '@/components/capy/icons/SkipIcon';
 import { StatsIcon } from '@/components/capy/icons/StatsIcon';
 import { Button } from '@/components/ui/Button';
+import { swatchColor } from '@/components/ui/ColorPicker';
 import { DialogueBubble } from '@/components/ui/DialogueBubble';
 import { IconButton } from '@/components/ui/IconButton';
 import { Sparks } from '@/components/ui/Sparks';
@@ -19,9 +20,8 @@ import { Text } from '@/components/ui/Text';
 import { TimerClock } from '@/components/ui/TimerClock';
 import { useRunTicker } from '@/hooks/useRunTicker';
 import { useSessionNotifications } from '@/hooks/useSessionNotifications';
-import { newSessionId, recordSession } from '@/src/db/sessions';
 import { useAppStore } from '@/src/store';
-import { resolvePosition, totalPlanMs } from '@/src/store/types';
+import { resolvePosition } from '@/src/store/types';
 import { MESSAGE_INTERVAL_MS, messageFor } from '@/src/theme/messages';
 import { colors } from '@/src/theme/tokens';
 
@@ -49,6 +49,7 @@ export default function TimerScreen() {
   const pause = useAppStore((s) => s.pause);
   const resume = useAppStore((s) => s.resume);
   const skipPhase = useAppStore((s) => s.skipPhase);
+  const abandonRun = useAppStore((s) => s.abandonRun);
   const reset = useAppStore((s) => s.reset);
 
   const isIdle = status === 'idle';
@@ -82,32 +83,6 @@ export default function TimerScreen() {
     const id = setInterval(() => setMessageIndex((i) => i + 1), MESSAGE_INTERVAL_MS);
     return () => clearInterval(id);
   }, [isRunning]);
-
-  // Persist the run once, on the transition into 'ended'.
-  const recorded = useRef(false);
-  useEffect(() => {
-    if (!isEnded) {
-      recorded.current = false;
-      return;
-    }
-    if (recorded.current) return;
-    recorded.current = true;
-
-    const state = useAppStore.getState();
-    void recordSession({
-      id: newSessionId(),
-      startedAt: state.startedAt,
-      finishedAt: Date.now(),
-      plannedMs: totalPlanMs(state.plan),
-      focusMs: state.focusMsCompleted,
-      breakMs: state.breakMsCompleted,
-      loops: state.plan.loops,
-      categoryId: state.plan.categoryId ?? null,
-      companionId: state.plan.companionId,
-      coinsEarned: state.coinsAwarded,
-      skipped: state.skipped ? 1 : 0,
-    });
-  }, [isEnded]);
 
   const category = categories.find((c) => c.id === plan.categoryId);
 
@@ -176,7 +151,7 @@ export default function TimerScreen() {
               icon={RestartIcon}
               size={28}
               accessibilityLabel="Restart session"
-              onPress={reset}
+              onPress={() => abandonRun()}
             />
             <IconButton
               icon={PlayIcon}
@@ -223,7 +198,7 @@ export default function TimerScreen() {
         ) : (
           category && (
             <View style={styles.categoryPill}>
-              <View style={[styles.categoryDot, { backgroundColor: category.color }]} />
+              <View style={[styles.categoryDot, { backgroundColor: swatchColor(category.color) }]} />
               <Text variant="caption">{category.name}</Text>
             </View>
           )

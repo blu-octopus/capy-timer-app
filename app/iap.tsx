@@ -11,6 +11,7 @@ import {
   ensurePurchasesConfigured,
   getCoinOfferings,
   purchaseCoins,
+  restorePurchases,
   type CoinOffering,
 } from '@/src/purchases';
 import { UNAVAILABLE_MESSAGES } from '@/src/purchases/messages';
@@ -31,6 +32,7 @@ export default function IapScreen() {
 
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(false);
 
   const load = useCallback(async () => {
     const status = ensurePurchasesConfigured();
@@ -60,6 +62,25 @@ export default function IapScreen() {
     }
     // 'cancelled' needs no message — the user backed out on purpose.
   };
+
+  const onRestore = async () => {
+    setRestoring(true);
+    const result = await restorePurchases();
+    setRestoring(false);
+
+    if (result.outcome === 'error') {
+      Alert.alert('Restore failed', result.message);
+    } else if (result.entitlementsRestored > 0) {
+      Alert.alert('Purchases restored', 'Your entitlements are back.');
+    } else {
+      Alert.alert(
+        'Nothing to restore',
+        'Coin packs are one-time purchases, and your balance is saved on this device — there’s nothing extra to bring back.',
+      );
+    }
+  };
+
+  const canRestore = state.kind === 'ready' || state.kind === 'empty';
 
   return (
     <View style={styles.backdrop}>
@@ -105,6 +126,15 @@ export default function IapScreen() {
         <Text variant="caption" style={styles.thanks}>
           Thank you for supporting the capybaras!
         </Text>
+
+        {canRestore && (
+          <Button
+            label={restoring ? 'Restoring...' : 'Restore Purchases'}
+            variant="ghost"
+            disabled={restoring}
+            onPress={() => void onRestore()}
+          />
+        )}
 
         <Button label="Close" variant="ghost" onPress={router.back} />
       </View>

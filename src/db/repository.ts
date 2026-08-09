@@ -51,8 +51,10 @@ function toCategory(row: CategoryRow): Category {
 
 export async function insertSession(session: NewSession): Promise<void> {
   const db = await getDatabase();
+  // OR IGNORE: runs are recorded under a stable per-run id, and crash
+  // recovery may replay the insert — the first write wins, replays no-op.
   await db.runAsync(
-    `INSERT INTO sessions
+    `INSERT OR IGNORE INTO sessions
        (id, started_at, finished_at, planned_ms, focus_ms, break_ms, loops,
         category_id, companion_id, coins_earned, skipped)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
