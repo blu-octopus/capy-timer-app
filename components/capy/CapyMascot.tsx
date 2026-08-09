@@ -202,10 +202,6 @@ export function CapyMascot({
     <View style={[styles.container, { width: containerWidth, height: size }]}>
       <Animated.View style={[animatedStyle, locked && styles.dimmed]}>
         <CrossfadeFrames
-          // Forces a fresh mount (and a fresh mix=0 shared value) on every
-          // mood/skin change instead of reusing one across an existing
-          // instance — see CrossfadeFrames for why that reuse used to flash.
-          key={`${skin}-${art.state}`}
           FrameA={art.frames[0]}
           FrameB={art.frames[1]}
           height={size}

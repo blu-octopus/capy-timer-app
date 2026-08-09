@@ -78,6 +78,16 @@ describe('timer screen subheading', () => {
 
     expect(screen.queryByText(/Focus Time/)).toBeNull();
   });
+
+  it("shows the prep segment's length when prep is enabled", () => {
+    renderIdle();
+    act(() => {
+      useAppStore.setState({ plan: { ...useAppStore.getState().plan, prepEnabled: true } });
+      useAppStore.getState().startRun(T0);
+    });
+
+    expect(screen.getByText('Prep Time · 5 min')).toBeTruthy();
+  });
 });
 
 describe('timer screen coin award', () => {
