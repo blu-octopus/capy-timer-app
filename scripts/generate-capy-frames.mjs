@@ -15,6 +15,13 @@
  * named part comes through the generated TSX as its own addressable `<G
  * id="...">`, unchanged visually from letting SVGO run free.
  *
+ * That config also has to re-disable `removeViewBox`, which is NOT about
+ * rigging: passing --svgo-config *replaces* SVGR's own SVGO config wholesale
+ * rather than merging with it, and SVGR's version exists mostly to turn that
+ * one plugin off. Losing it while --no-dimensions also strips width/height
+ * leaves the frames with no intrinsic size at all, and every capybara
+ * renders cropped.
+ *
  * Three further post-processing passes fix things SVGR's react-native
  * template can't handle on its own, or add to it:
  * - `xmlns` isn't a valid prop on this project's react-native-svg `Svg`

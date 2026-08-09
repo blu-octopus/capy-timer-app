@@ -14,6 +14,7 @@ import { createCategory } from '@/src/db/categories';
 import { tapFeedback } from '@/src/feedback';
 import { useAppStore } from '@/src/store';
 import { PREP_MS, totalPlanMinutes } from '@/src/store/types';
+import { formatDuration } from '@/src/theme/formatDuration';
 import { colors } from '@/src/theme/tokens';
 
 const FOCUS_OPTIONS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 75, 90];
@@ -100,10 +101,7 @@ export default function SessionSetupScreen() {
 
         <View style={styles.row}>
           <Text variant="body">Total time</Text>
-          <Text variant="body">
-            {totalMinutes >= 60 ? `${Math.floor(totalMinutes / 60)} hr ` : ''}
-            {String(totalMinutes % 60).padStart(totalMinutes >= 60 ? 2 : 1, '0')} min
-          </Text>
+          <Text variant="body">{formatDuration(totalMinutes)}</Text>
         </View>
 
         <SegmentedTabs

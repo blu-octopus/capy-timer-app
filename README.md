@@ -126,10 +126,9 @@ replaces the Session Details button until you buy it.
 
 Every skin renders real hand-drawn art per mood — content while idle, cross
 while paused, dancing when a session lands — as pairs of frames exported from
-Figma and looped through a soft crossfade
-(`components/capy/CrossfadeFrames.tsx`) that runs faster the more animated the
-mood. A fifth skin, `avocado`, has art ready but isn't wired into the
-purchasable roster yet.
+Figma and played as a two-frame flipbook (`components/capy/FrameLoop.tsx`)
+that runs faster the more animated the mood. A fifth skin, `avocado`, has art
+ready but isn't wired into the purchasable roster yet.
 
 The raw per-mood `.svg` frames live in `components/capy/frames/` (see its
 `README.md` for the paste-in convention if you're adding or updating art).

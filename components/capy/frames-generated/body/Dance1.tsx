@@ -10,7 +10,11 @@ type SvgDance1Props = SvgProps & {
   parts?: Partial<Record<string, Partial<GProps>>>;
 };
 const SvgDance1 = ({ parts, ...svgProps }: SvgDance1Props) => (
-  <Svg fill="none" {...svgProps}>
+  <Svg
+    fill="none"
+    viewBox="0 0 130 206"
+    {...svgProps}
+  >
     <AnimatedG id="capy anim" animatedProps={parts?.["capy anim"]}>
       <AnimatedG id="main dance 1" animatedProps={parts?.["main dance 1"]}>
         <AnimatedG id="capy" animatedProps={parts?.["capy"]}>

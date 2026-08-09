@@ -90,6 +90,36 @@ describe('timer screen subheading', () => {
   });
 });
 
+describe('timer screen session summary', () => {
+  it('names the tagged category and the total planned length', () => {
+    act(() =>
+      useAppStore.setState({
+        categories: [{ id: 'cat_egg', name: 'egg', color: 'yellow' }],
+        plan: { ...useAppStore.getState().plan, categoryId: 'cat_egg' },
+      }),
+    );
+    renderIdle();
+
+    // 20 focus + 10 break, twice.
+    expect(screen.getByText('egg session · 1 hr')).toBeTruthy();
+  });
+
+  it('falls back to "focus" when no category is tagged', () => {
+    renderIdle();
+
+    expect(screen.getByText('focus session · 1 hr')).toBeTruthy();
+  });
+
+  it('keeps counting prep time toward the total', () => {
+    act(() =>
+      useAppStore.setState({ plan: { ...useAppStore.getState().plan, prepEnabled: true } }),
+    );
+    renderIdle();
+
+    expect(screen.getByText('focus session · 1 hr 5 min')).toBeTruthy();
+  });
+});
+
 describe('timer screen coin award', () => {
   it('reflects the 10-coins-per-minute rate on the completion screen', () => {
     renderIdle();

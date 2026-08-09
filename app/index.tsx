@@ -24,7 +24,8 @@ import { useRunTicker } from '@/hooks/useRunTicker';
 import { useSessionNotifications } from '@/hooks/useSessionNotifications';
 import { tapFeedback } from '@/src/feedback';
 import { useAppStore } from '@/src/store';
-import { resolvePosition } from '@/src/store/types';
+import { resolvePosition, totalPlanMinutes } from '@/src/store/types';
+import { formatDuration } from '@/src/theme/formatDuration';
 import { DIALOGUE_BUCKET_MS, dialogueFor } from '@/src/theme/messages';
 import { colors } from '@/src/theme/tokens';
 
@@ -107,6 +108,11 @@ export default function TimerScreen() {
 
   const category = categories.find((c) => c.id === plan.categoryId);
 
+  // What this whole sitting adds up to, named by whatever it was tagged as —
+  // the per-phase caption down by the clock only ever describes the segment
+  // running right now, so without this the total is invisible once you start.
+  const sessionSummary = `${category?.name ?? 'focus'} session · ${formatDuration(totalPlanMinutes(plan))}`;
+
   // Browsing companions is an idle-only activity, so the carousel tracks its
   // own position and only writes the plan for buddies that are unlocked —
   // a locked one stays a preview you can look at but not adopt.
@@ -160,6 +166,10 @@ export default function TimerScreen() {
           onPress={() => router.push('/stats')}
         />
         <CoinWallet amount={coins} onPress={() => router.push('/iap')} />
+      </View>
+
+      <View style={styles.sessionSummary}>
+        <Text variant="caption">{sessionSummary}</Text>
       </View>
 
       <View style={styles.body}>
@@ -314,7 +324,9 @@ function CompletionState({ coins, companionId }: { coins: number; companionId: s
             <Text variant="h1" style={styles.awardText}>
               +{coins}
             </Text>
-            <Sparks />
+            {/* Reaches out past the coin row to cover the mascot behind it —
+                finishing a session is the one burst that should feel big. */}
+            <Sparks scale={2.6} />
           </View>
         )}
       </View>
@@ -343,6 +355,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
   },
+  sessionSummary: {
+    alignItems: 'center',
+    paddingBottom: 4,
+  },
   body: {
     flex: 1,
     alignItems: 'center',
@@ -362,6 +378,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    // Clear of the mascot's ears: the slot bottom-aligns its contents, which
+    // otherwise parks the coin right on top of the capybara's head.
+    marginBottom: 24,
   },
   awardText: {
     fontSize: 20,

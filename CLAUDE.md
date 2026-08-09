@@ -90,8 +90,14 @@ files. *Every* skin, `basic` included, renders real per-mood art: a set of hand-
 exported from Figma (`components/capy/frames/`, raw `.svg`, one file per skin/state/frame — see
 its `README.md` for the paste-in convention), converted to `react-native-svg` TSX via
 `npm run frames` into `components/capy/frames-generated/` (generated, not hand-edited — rerun
-the script instead of touching these files directly), and looped through a 2-frame opacity
-crossfade (`components/capy/CrossfadeFrames.tsx`) whose speed varies with the mood.
+the script instead of touching these files directly), and played as a 2-frame flipbook
+(`components/capy/FrameLoop.tsx`) whose speed varies with the mood.
+
+`FrameLoop` **cuts** between the pair rather than crossfading them, and that is load-bearing:
+blending meant that at the midpoint both drawings sat at 50% opacity at once, so the linework
+doubled and the whole capybara washed out and re-sharpened every cycle — which is what read as
+a "flash". Opacity is a step function on the UI thread, never an intermediate value. Both
+frames stay mounted, so a swap costs no re-render of the (very large) SVG trees.
 
 The generated components are **rigged, not flat**: `scripts/capy-frames.svgo.config.json`
 turns off the SVGO passes (`collapseGroups`, `cleanupIds`, `mergePaths`) that would otherwise
@@ -105,6 +111,11 @@ of naming the layer in Figma and passing a value — no new frame art, no depend
 stays on the UI thread, unlike interpolating these paths (some are ~50k characters) would.
 A few older paste-ins (`body/idle-1.svg`, `head/*.svg`, `variations/fighting/idle-1.svg`)
 exported without ids and can't be rigged until they're re-copied from Figma.
+
+That config must also keep `removeViewBox: false`. Passing `--svgo-config` *replaces* SVGR's
+own SVGO config rather than merging into it, and disabling that one plugin is most of what
+SVGR's config is for; losing it while `--no-dimensions` also strips width/height leaves the
+frames with no intrinsic size and every capybara renders cropped.
 
 `basic` lives under `frames-generated/body/` — the Figma section names the plain, costume-less
 capybara "body", but it is a complete character, not a headless torso (it is
@@ -137,8 +148,8 @@ equivalents that were judged more compatible with Expo SDK 54 / new architecture
 already covered by tests:
 
 - **Animations**: Reanimated + hand-drawn SVG frames, not Lottie. There are no Lottie asset
-  files; capy mood is a Reanimated-driven crossfade between hand-drawn frame pairs
-  (`components/capy/CapyMascot.tsx`, `CrossfadeFrames.tsx`).
+  files; capy mood is a Reanimated-driven flipbook over hand-drawn frame pairs
+  (`components/capy/CapyMascot.tsx`, `FrameLoop.tsx`).
 - **Time picker**: `components/ui/OptionWheel.tsx`, a hand-port of the React Bits web
   "OptionWheel", not a picker dependency. The arc math is the original's; the DOM parts
   (pointer capture, rAF easing loop, `color-mix`) are re-expressed in gesture-handler and
