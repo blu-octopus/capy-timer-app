@@ -22,6 +22,7 @@ import { TimerClock } from '@/components/ui/TimerClock';
 import { useRunFeedback } from '@/hooks/useRunFeedback';
 import { useRunTicker } from '@/hooks/useRunTicker';
 import { useSessionNotifications } from '@/hooks/useSessionNotifications';
+import { tapFeedback } from '@/src/feedback';
 import { useAppStore } from '@/src/store';
 import { resolvePosition } from '@/src/store/types';
 import { DIALOGUE_BUCKET_MS, dialogueFor } from '@/src/theme/messages';
@@ -265,7 +266,10 @@ export default function TimerScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`Unlock ${browsing.name} for ${browsing.priceCoins} coins`}
-              onPress={onUnlock}
+              onPress={() => {
+                tapFeedback();
+                onUnlock();
+              }}
               style={styles.unlockRow}
             >
               <Text variant="h1" style={styles.unlockText}>

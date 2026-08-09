@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
+import { selectionFeedback } from '@/src/feedback';
 import { colors, seeds } from '@/src/theme/tokens';
 import { Sparks } from './Sparks';
 import { WobbleBorder } from './WobbleBorder';
@@ -48,7 +49,10 @@ export function Toggle({ value, onValueChange, disabled, accessibilityLabel }: T
       accessibilityLabel={accessibilityLabel}
       disabled={disabled}
       hitSlop={(44 - TRACK_HEIGHT) / 2}
-      onPress={() => onValueChange(!value)}
+      onPress={() => {
+        selectionFeedback();
+        onValueChange(!value);
+      }}
       style={[styles.track, { borderColor: tint }, disabled && styles.disabled]}
     >
       <Animated.View

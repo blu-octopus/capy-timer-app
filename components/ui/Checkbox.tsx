@@ -8,6 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 
+import { selectionFeedback } from '@/src/feedback';
 import { colors } from '@/src/theme/tokens';
 import { Sparks } from './Sparks';
 
@@ -60,7 +61,10 @@ export function Checkbox({ checked, onChange, accessibilityLabel }: CheckboxProp
       accessibilityState={{ checked }}
       accessibilityLabel={accessibilityLabel}
       hitSlop={(44 - BOX_SIZE) / 2}
-      onPress={() => onChange(!checked)}
+      onPress={() => {
+        selectionFeedback();
+        onChange(!checked);
+      }}
       style={styles.box}
     >
       <Svg width={ICON_WIDTH} height={ICON_HEIGHT} viewBox="0 0 16 12">

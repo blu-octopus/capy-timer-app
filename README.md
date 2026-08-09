@@ -39,12 +39,13 @@ a quick internal layout check — this app is not shipped on web, and some
 native-only behavior (SQLite, real device notifications, IAP) intentionally
 doesn't run there.
 
-Two further web-only caveats worth knowing before you trust the preview:
-`onLayout` never fires under react-native-web and `useWindowDimensions`
-reports zero, so anything that measures itself before drawing looks wrong
-there. Most visibly, the hand-drawn wobble outlines on buttons, speech
-bubbles, and modal frames simply don't appear in the browser. They render
-correctly on a device.
+One web-only caveat worth knowing before you trust the preview: `onLayout`
+fires unreliably under react-native-web — it lands on the first load after a
+cold start, then stops on later reloads. Anything that measures itself before
+drawing is intermittently missing there, most visibly the hand-drawn wobble
+outlines on buttons, speech bubbles, and modal frames, which come and go
+between reloads. They render correctly on a device, so reload a couple of
+times before concluding the browser is showing you a real bug.
 
 ### What works in Expo Go
 

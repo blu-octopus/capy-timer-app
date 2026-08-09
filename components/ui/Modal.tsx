@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal as RNModal, Pressable, StyleSheet, View } from 'react-native';
 
+import { tapFeedback } from '@/src/feedback';
 import { colors, seeds } from '@/src/theme/tokens';
 import { Button } from './Button';
 import { Text } from './Text';
@@ -37,7 +38,15 @@ export function Modal({
       statusBarTranslucent
     >
       {/* Tapping the backdrop dismisses; taps inside the card must not. */}
-      <Pressable style={styles.backdrop} onPress={onDismiss} accessibilityLabel="Close">
+      <Pressable
+        style={styles.backdrop}
+        accessibilityLabel="Close"
+        onPress={() => {
+          tapFeedback();
+          onDismiss();
+        }}
+      >
+        {/* The Cancel and Done buttons fire their own feedback via Button. */}
         <Pressable style={styles.popupWrapper} onPress={(e) => e.stopPropagation()}>
           <View style={styles.popup} onLayout={onLayout}>
             <WobbleBorder

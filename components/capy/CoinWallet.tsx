@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { tapFeedback } from '@/src/feedback';
 import { colors, fonts } from '@/src/theme/tokens';
 import { Text } from '@/components/ui/Text';
 import { Coin } from './Coin';
@@ -36,7 +37,10 @@ export function CoinWallet({ amount, onPress }: CoinWalletProps) {
       accessibilityRole="button"
       accessibilityLabel={`${label} coins. Buy more.`}
       hitSlop={12}
-      onPress={onPress}
+      onPress={() => {
+        tapFeedback();
+        onPress();
+      }}
     >
       {content}
     </Pressable>

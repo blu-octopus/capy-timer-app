@@ -40,10 +40,11 @@ export interface CompanionCarouselProps {
  *
  * This deliberately animates one buddy out and the next in rather than
  * scrolling a paged list. A paged list has to know its own pixel width, and
- * every way of obtaining that is unreliable here: onLayout never fires under
- * react-native-web and useWindowDimensions reports zero there, which left the
- * carousel rendering every companion stacked in a one-pixel column. A
- * transition needs no measurement, so it behaves the same everywhere.
+ * both ways of obtaining that are unreliable under react-native-web: onLayout
+ * fires only intermittently and useWindowDimensions has been seen reporting
+ * zero, which left the carousel rendering every companion stacked in a
+ * one-pixel column. A transition needs no measurement, so it behaves the same
+ * everywhere.
  */
 export function CompanionCarousel({
   companions,

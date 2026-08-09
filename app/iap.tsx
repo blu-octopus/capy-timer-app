@@ -14,6 +14,7 @@ import {
   restorePurchases,
   type CoinOffering,
 } from '@/src/purchases';
+import { tapFeedback } from '@/src/feedback';
 import { UNAVAILABLE_MESSAGES } from '@/src/purchases/messages';
 import { useAppStore } from '@/src/store';
 import { colors, seeds } from '@/src/theme/tokens';
@@ -84,7 +85,14 @@ export default function IapScreen() {
 
   return (
     <View style={styles.backdrop}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={router.back} accessibilityLabel="Close" />
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        accessibilityLabel="Close"
+        onPress={() => {
+          tapFeedback();
+          router.back();
+        }}
+      />
 
       <View style={styles.popup} onLayout={onLayout}>
         <WobbleBorder width={size.width} height={size.height} radius={20} seed={seeds.modal} />

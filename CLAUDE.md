@@ -159,11 +159,15 @@ already covered by tests:
   `DEFAULT_COMPANIONS` (`src/store/index.ts`) — that needs a name/price decision.
 - **Haptics, sound and sheet detents need a device**: none of them exist in the browser
   preview, and Jest only asserts that the right calls are made. Check them in Expo Go.
-- **`onLayout` never fires under react-native-web**, and `useWindowDimensions` reports zero
-  there. Anything that measures itself before drawing is therefore invisible or mis-sized in
-  the browser preview only — most visibly every `WobbleBorder` outline (buttons, speech
-  bubbles, modal frames). Native is unaffected. The companion carousel was rebuilt to need no
-  measurement at all rather than work around it again.
+- **`onLayout` fires unreliably under react-native-web.** It lands on the first page load
+  after a cold Metro start and then stops on subsequent reloads, which looks like a race
+  between hydration and the ResizeObserver behind RNW's implementation; `useWindowDimensions`
+  has been observed reporting zero in the same state. Anything that measures itself before
+  drawing is therefore intermittently invisible or mis-sized **in the browser preview only** —
+  most visibly the `WobbleBorder` outlines (buttons, speech bubbles, modal frames), which
+  appear and disappear between reloads. Native is unaffected. Don't trust a single web
+  screenshot to tell you an outline is missing; reload before concluding anything. The
+  companion carousel sidesteps this entirely by needing no measurement.
 - **Frame shadows lost their blur**: the SVG→TSX conversion (`@svgr/cli`) drops `<filter>`
   elements, so shadow/highlight blur on the new frame art was stripped rather than shipped
   broken (dangling filter references were removed). Shadows render as solid, hard-edged shapes

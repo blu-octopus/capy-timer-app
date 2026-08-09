@@ -1,6 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { selectionFeedback } from '@/src/feedback';
 import { colors } from '@/src/theme/tokens';
 
 /** Category palette. Values are token names so a palette change re-themes existing tags. */
@@ -42,7 +43,10 @@ export function ColorPicker({ value, onChange }: ColorPickerProps) {
             accessibilityState={{ selected }}
             accessibilityLabel={swatch.value}
             hitSlop={(44 - RING_SIZE) / 2}
-            onPress={() => onChange(swatch.value)}
+            onPress={() => {
+              selectionFeedback();
+              onChange(swatch.value);
+            }}
             style={[styles.ring, selected && styles.ringSelected]}
           >
             <View style={[styles.swatch, { backgroundColor: swatch.color }]} />
