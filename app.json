@@ -12,7 +12,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.bluoctopus.capytimer",
       "entitlements": {
-        "com.apple.security.application-groups": ["group.com.bluoctopus.capytimer.widgets"]
+        "com.apple.security.application-groups": [
+          "group.com.bluoctopus.capytimer.widgets"
+        ]
       }
     },
     "android": {
@@ -77,7 +79,8 @@
           ]
         }
       ],
-      "@bacons/apple-targets"
+      "@bacons/apple-targets",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

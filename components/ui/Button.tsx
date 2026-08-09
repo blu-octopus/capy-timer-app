@@ -1,6 +1,7 @@
 import React from 'react';
-import { Pressable, StyleSheet, View, type PressableProps } from 'react-native';
+import { Pressable, StyleSheet, View, type GestureResponderEvent, type PressableProps } from 'react-native';
 
+import { playFeedback, type FeedbackKind } from '@/src/feedback';
 import { colors, seeds } from '@/src/theme/tokens';
 import { Text } from './Text';
 import { useMeasuredSize, WobbleBorder } from './WobbleBorder';
@@ -10,6 +11,8 @@ export type ButtonVariant = 'filled' | 'outlined' | 'ghost';
 export interface ButtonProps extends Omit<PressableProps, 'children' | 'style'> {
   label: string;
   variant?: ButtonVariant;
+  /** Which press feedback to fire; 'none' opts out entirely. */
+  feedback?: FeedbackKind | 'none';
 }
 
 const VISUAL_HEIGHT = 28;
@@ -21,8 +24,23 @@ const RADIUS = 10;
  * expands to the 44pt accessibility minimum (capy-ui does this on web with
  * an invisible ::after overlay).
  */
-export function Button({ label, variant = 'filled', disabled, testID, ...rest }: ButtonProps) {
+export function Button({
+  label,
+  variant = 'filled',
+  disabled,
+  testID,
+  onPress,
+  feedback = 'tap',
+  ...rest
+}: ButtonProps) {
   const { size, onLayout } = useMeasuredSize();
+
+  // Intercepting onPress here is what gives every Button in the app tactile
+  // feedback without each call site remembering to ask for it.
+  const handlePress = (event: GestureResponderEvent) => {
+    if (feedback !== 'none') playFeedback(feedback);
+    onPress?.(event);
+  };
 
   return (
     <Pressable
@@ -30,6 +48,7 @@ export function Button({ label, variant = 'filled', disabled, testID, ...rest }:
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       hitSlop={(MIN_TOUCH_TARGET - VISUAL_HEIGHT) / 2}
+      onPress={handlePress}
       style={({ pressed }) => [styles.pressable, (pressed || disabled) && styles.dimmed]}
       testID={testID}
       {...rest}
