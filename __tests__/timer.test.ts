@@ -113,9 +113,9 @@ describe('resolvePosition', () => {
 });
 
 describe('coinsForFocusMs', () => {
-  it('pays one coin per whole focus minute', () => {
-    expect(coinsForFocusMs(25 * MIN)).toBe(25);
-    expect(coinsForFocusMs(25.9 * MIN)).toBe(25);
+  it('pays 10 coins per whole focus minute', () => {
+    expect(coinsForFocusMs(25 * MIN)).toBe(250);
+    expect(coinsForFocusMs(25.9 * MIN)).toBe(250);
     expect(coinsForFocusMs(30 * 1000)).toBe(0);
   });
 });
@@ -179,8 +179,8 @@ describe('timer run', () => {
     const state = useAppStore.getState();
     expect(state.status).toBe('ended');
     // 40 minutes of focus across both loops.
-    expect(state.coinsAwarded).toBe(40);
-    expect(state.wallet.coins).toBe(240);
+    expect(state.coinsAwarded).toBe(400);
+    expect(state.wallet.coins).toBe(600);
   });
 
   it('skips to the next phase and keeps the clock consistent', () => {
@@ -206,8 +206,8 @@ describe('timer run', () => {
     useAppStore.getState().tick(T0 + 45 * MIN);
     const state = useAppStore.getState();
     expect(state.status).toBe('ended');
-    expect(state.coinsAwarded).toBe(25);
-    expect(state.wallet.coins).toBe(225);
+    expect(state.coinsAwarded).toBe(250);
+    expect(state.wallet.coins).toBe(450);
   });
 
   it('skipping a break changes no coin math', () => {
@@ -222,7 +222,7 @@ describe('timer run', () => {
     useAppStore.getState().tick(T0 + 55 * MIN);
     const state = useAppStore.getState();
     expect(state.status).toBe('ended');
-    expect(state.coinsAwarded).toBe(40);
+    expect(state.coinsAwarded).toBe(400);
   });
 
   it('measures the skip from the wall clock, not the last tick', () => {
@@ -243,7 +243,7 @@ describe('timer run', () => {
     const state = useAppStore.getState();
     expect(state.status).toBe('ended');
     expect(state.skipped).toBe(true);
-    expect(state.coinsAwarded).toBe(25);
+    expect(state.coinsAwarded).toBe(250);
   });
 
   it('ends the run when skipping the final phase', () => {
@@ -261,8 +261,8 @@ describe('timer run', () => {
     useAppStore.getState().endRun(T0 + 7 * MIN);
 
     const state = useAppStore.getState();
-    expect(state.coinsAwarded).toBe(7);
-    expect(state.wallet.coins).toBe(207);
+    expect(state.coinsAwarded).toBe(70);
+    expect(state.wallet.coins).toBe(270);
   });
 
   it('does not award coins twice if endRun is called again', () => {
@@ -295,7 +295,7 @@ describe('run persistence and recovery', () => {
       finishedAt: T0 + 60 * MIN,
       focusMs: 40 * MIN,
       breakMs: 20 * MIN,
-      coinsEarned: 40,
+      coinsEarned: 400,
       skipped: 0,
     });
   });
@@ -315,7 +315,7 @@ describe('run persistence and recovery', () => {
 
     expect(recordSessionMock.mock.calls[0]![0]).toMatchObject({
       focusMs: 25 * MIN,
-      coinsEarned: 25,
+      coinsEarned: 250,
       skipped: 1,
     });
   });
@@ -328,8 +328,8 @@ describe('run persistence and recovery', () => {
 
     const state = useAppStore.getState();
     expect(state.status).toBe('ended');
-    expect(state.coinsAwarded).toBe(40);
-    expect(state.wallet.coins).toBe(240);
+    expect(state.coinsAwarded).toBe(400);
+    expect(state.wallet.coins).toBe(600);
     expect(recordSessionMock).toHaveBeenCalledTimes(1);
   });
 
@@ -361,7 +361,7 @@ describe('run persistence and recovery', () => {
 
     useAppStore.getState().reconcileAfterRestart(T0 + 61 * MIN);
 
-    expect(useAppStore.getState().wallet.coins).toBe(240);
+    expect(useAppStore.getState().wallet.coins).toBe(600);
     expect(recordSessionMock).toHaveBeenCalledTimes(1);
     expect(recordSessionMock.mock.calls[0]![0].id).toBe(firstRow.id);
   });
@@ -373,11 +373,11 @@ describe('run persistence and recovery', () => {
 
     const state = useAppStore.getState();
     expect(state.status).toBe('idle');
-    expect(state.wallet.coins).toBe(207);
+    expect(state.wallet.coins).toBe(270);
     expect(recordSessionMock).toHaveBeenCalledTimes(1);
     expect(recordSessionMock.mock.calls[0]![0]).toMatchObject({
       focusMs: 7 * MIN,
-      coinsEarned: 7,
+      coinsEarned: 70,
       skipped: 1,
       finishedAt: T0 + 9 * MIN,
     });

@@ -184,7 +184,11 @@ export default function TimerScreen() {
             )}
 
             <View style={styles.clockSlot}>
-              {!isIdle && <Text variant="caption">{PHASE_LABEL[phase]}</Text>}
+              {!isIdle && (
+                <Text variant="caption">
+                  {PHASE_LABEL[phase]} · {Math.round(phaseDurationMs / 60000)} min
+                </Text>
+              )}
               <TimerClock seconds={displaySeconds} direction={plan.countDirection} />
               {(isRunning || isPaused) && plan.loops > 1 && (
                 <Text variant="caption">
