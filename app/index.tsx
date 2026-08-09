@@ -18,11 +18,12 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Sparks } from '@/components/ui/Sparks';
 import { Text } from '@/components/ui/Text';
 import { TimerClock } from '@/components/ui/TimerClock';
+import { useRunFeedback } from '@/hooks/useRunFeedback';
 import { useRunTicker } from '@/hooks/useRunTicker';
 import { useSessionNotifications } from '@/hooks/useSessionNotifications';
 import { useAppStore } from '@/src/store';
 import { resolvePosition } from '@/src/store/types';
-import { MESSAGE_INTERVAL_MS, messageFor } from '@/src/theme/messages';
+import { DIALOGUE_BUCKET_MS, dialogueFor } from '@/src/theme/messages';
 import { colors } from '@/src/theme/tokens';
 
 const PHASE_LABEL = {
@@ -34,6 +35,7 @@ const PHASE_LABEL = {
 export default function TimerScreen() {
   useRunTicker();
   useSessionNotifications();
+  useRunFeedback();
   const router = useRouter();
 
   const status = useAppStore((s) => s.status);
@@ -77,12 +79,26 @@ export default function TimerScreen() {
         ? 'working'
         : 'idle';
 
-  const [messageIndex, setMessageIndex] = useState(0);
+  // A run's own elapsed time drives the bubble while it ticks; idle and
+  // paused have no clock of their own, so they get a plain wall-clock counter
+  // to rotate on. Bucketing either source keeps the bubble from re-rendering
+  // on every one of the ticker's 250ms samples.
+  const [idleBucket, setIdleBucket] = useState(0);
   useEffect(() => {
-    if (!isRunning) return;
-    const id = setInterval(() => setMessageIndex((i) => i + 1), MESSAGE_INTERVAL_MS);
+    if (isRunning) return;
+    const id = setInterval(() => setIdleBucket((b) => b + 1), DIALOGUE_BUCKET_MS);
     return () => clearInterval(id);
   }, [isRunning]);
+
+  const dialogue = dialogueFor({
+    status,
+    phase,
+    progress: phaseDurationMs > 0 ? Math.min(1, msInPhase / phaseDurationMs) : 0,
+    msRemainingInPhase: Math.max(0, phaseDurationMs - msInPhase),
+    loop: (position?.segment?.loopIndex ?? 0) + 1,
+    totalLoops: plan.loops,
+    bucket: isRunning ? Math.floor(elapsedMs / DIALOGUE_BUCKET_MS) : idleBucket,
+  });
 
   const category = categories.find((c) => c.id === plan.categoryId);
 
@@ -104,11 +120,7 @@ export default function TimerScreen() {
         ) : (
           <>
             <View style={styles.bubbleSlot}>
-              {(isRunning || isPaused) && (
-                <DialogueBubble>
-                  {isPaused ? '...' : messageFor(phase, messageIndex)}
-                </DialogueBubble>
-              )}
+              <DialogueBubble>{dialogue}</DialogueBubble>
             </View>
 
             <CapyMascot size={190} mood={mood} skin={skinForCompanionId(plan.companionId)} />
