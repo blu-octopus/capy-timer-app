@@ -71,6 +71,32 @@ const DEFAULTS = {
 /** Matches the original's settling feel without its per-frame easing loop. */
 const SETTLE_MS = 260;
 
+/**
+ * Decides where a release lands and whether that's new information.
+ *
+ * `shouldCommit` is false when the release target is the index the live drag
+ * already reported (the common case — most releases just settle where the
+ * finger already was). It's true only when momentum carries the wheel past
+ * an index the drag never reached, which is the one case that still needs a
+ * report. Exported (and marked `worklet` rather than relying on call-site
+ * auto-workletization) so it's callable directly from a test, unlike the rest
+ * of this file's Reanimated-only logic.
+ */
+export function resolveFlickTarget(
+  positionAtRelease: number,
+  velocityY: number,
+  rowHeight: number,
+  optionCount: number,
+): { target: number; shouldCommit: boolean } {
+  'worklet';
+  const from = Math.round(positionAtRelease);
+  const momentum = -velocityY / rowHeight / 6;
+  const target = Math.round(
+    Math.min(optionCount - 1, Math.max(0, positionAtRelease + momentum)),
+  );
+  return { target, shouldCommit: target !== from };
+}
+
 function OptionRow({
   label,
   index,
@@ -166,8 +192,13 @@ export function OptionWheel<T extends string | number>({
 
   const position = useSharedValue(selectedIndex);
   const panStart = useSharedValue(0);
-  /** Last index we told the UI about, so a settle can't double-report. */
-  const reported = useSharedValue(selectedIndex);
+  /**
+   * True while position.value is gliding toward an index that's already been
+   * reported (a momentum settle, or following an external value change) —
+   * every index the glide sweeps through on the way is old news, not a new
+   * selection, so the reaction below stays quiet until it clears.
+   */
+  const isAnimating = useSharedValue(false);
 
   const commit = useCallback(
     (index: number) => {
@@ -178,23 +209,32 @@ export function OptionWheel<T extends string | number>({
   );
 
   // Follow external changes (a reset, or another control writing the plan),
-  // but never fight the user mid-gesture.
+  // but never fight the user mid-gesture. Nothing needs telling here: the
+  // caller that changed `value` already knows what it set it to.
   useEffect(() => {
     if (Math.round(position.value) === selectedIndex) return;
     cancelAnimation(position);
-    position.value = withTiming(selectedIndex, { duration: SETTLE_MS, easing: Easing.out(Easing.quad) });
-    reported.value = selectedIndex;
-  }, [selectedIndex, position, reported]);
+    isAnimating.value = true;
+    position.value = withTiming(
+      selectedIndex,
+      { duration: SETTLE_MS, easing: Easing.out(Easing.quad) },
+      (finished) => {
+        if (finished) isAnimating.value = false;
+      },
+    );
+  }, [selectedIndex, position, isAnimating]);
 
-  // Fires the detent tick and reports upward as the wheel passes each option,
-  // during the drag as well as the settle — that continuous ticking is most of
-  // what makes the wheel feel physical.
+  // Fires the detent tick and reports upward as the wheel passes each option
+  // during a live drag — that continuous ticking is most of what makes the
+  // wheel feel physical. Suppressed during an animated glide (see
+  // isAnimating) so a big flick reports its landing index once, not every
+  // index it happens to sweep past on the way there.
   useAnimatedReaction(
     () => Math.round(position.value),
     (current, previous) => {
+      if (isAnimating.value) return;
       if (previous === null || current === previous) return;
       if (current < 0 || current >= options.length) return;
-      reported.value = current;
       runOnJS(selectionFeedback)();
       runOnJS(commit)(current);
     },
@@ -211,6 +251,10 @@ export function OptionWheel<T extends string | number>({
         .failOffsetX([-12, 12])
         .onStart(() => {
           cancelAnimation(position);
+          // A cancelled withTiming calls its callback with finished=false,
+          // which would otherwise leave isAnimating stuck true forever if the
+          // user grabs the wheel again mid-settle.
+          isAnimating.value = false;
           panStart.value = position.value;
         })
         .onUpdate((e) => {
@@ -220,17 +264,30 @@ export function OptionWheel<T extends string | number>({
           position.value = clamped;
         })
         .onEnd((e) => {
-          // Carry a flick a little past where the finger left off.
-          const momentum = -e.velocityY / rowHeight / 6;
-          const target = Math.round(
-            Math.min(options.length - 1, Math.max(0, position.value + momentum)),
+          const { target, shouldCommit } = resolveFlickTarget(
+            position.value,
+            e.velocityY,
+            rowHeight,
+            options.length,
           );
-          position.value = withTiming(target, {
-            duration: SETTLE_MS,
-            easing: Easing.out(Easing.quad),
-          });
+
+          isAnimating.value = true;
+          // The live drag already reported the index it was sitting on;
+          // report the new one now, immediately, rather than letting the
+          // glide's per-frame position sweep past everything in between.
+          if (shouldCommit) {
+            runOnJS(selectionFeedback)();
+            runOnJS(commit)(target);
+          }
+          position.value = withTiming(
+            target,
+            { duration: SETTLE_MS, easing: Easing.out(Easing.quad) },
+            (finished) => {
+              if (finished) isAnimating.value = false;
+            },
+          );
         }),
-    [options.length, rowHeight, position, panStart],
+    [options.length, rowHeight, position, panStart, isAnimating, commit],
   );
 
   return (

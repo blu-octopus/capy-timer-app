@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -65,11 +65,17 @@ export function CompanionCarousel({
     onIndexChange(next);
   };
 
-  // Slide the incoming buddy in from the side the swipe came from.
-  useEffect(() => {
-    drag.value = withTiming(0, { duration: SLIDE_MS, easing: Easing.out(Easing.quad) });
-  }, [index, drag]);
-
+  // One orchestrated sequence per transition — slide the outgoing buddy off,
+  // then (once that finishes) swap the index and jump the offset to the far
+  // edge so the new buddy immediately animates in from there. This used to
+  // be split across this function and a separate `useEffect([index, drag])`
+  // that slid the incoming buddy toward 0, but `go` below changing `index`
+  // triggers a re-render on essentially the same tick, so that effect fired
+  // almost immediately and overwrote the still-mid-flight outgoing animation
+  // — the "slide out, jump, slide in" never actually played, and the
+  // outgoing animation's own completion callback (also jumping `drag`) could
+  // still land afterward and yank the new buddy sideways. Doing the whole
+  // thing as one chain removes the race outright.
   const commit = (direction: 1 | -1) => {
     const next = index + direction;
     if (next < 0 || next >= companions.length) {
@@ -80,12 +86,13 @@ export function CompanionCarousel({
     drag.value = withTiming(
       -direction * SLIDE_DISTANCE,
       { duration: SLIDE_MS, easing: Easing.out(Easing.quad) },
-      () => {
-        // Jump to the far side so the new buddy slides in rather than back.
+      (finished) => {
+        if (!finished) return; // interrupted by another swipe; let that one own the sequence
         drag.value = direction * SLIDE_DISTANCE;
+        runOnJS(go)(next);
+        drag.value = withTiming(0, { duration: SLIDE_MS, easing: Easing.out(Easing.quad) });
       },
     );
-    go(next);
   };
 
   const pan = Gesture.Pan()
