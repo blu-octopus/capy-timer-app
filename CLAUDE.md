@@ -93,6 +93,19 @@ its `README.md` for the paste-in convention), converted to `react-native-svg` TS
 the script instead of touching these files directly), and looped through a 2-frame opacity
 crossfade (`components/capy/CrossfadeFrames.tsx`) whose speed varies with the mood.
 
+The generated components are **rigged, not flat**: `scripts/capy-frames.svgo.config.json`
+turns off the SVGO passes (`collapseGroups`, `cleanupIds`, `mergePaths`) that would otherwise
+discard Figma's layer names, so every named layer survives as a `<G id="...">` and the
+generator wires it to an optional `parts` prop —
+`<SvgIdle2 parts={{ head: headAnimatedProps }} />`, each value built with
+`useAnimatedProps<GProps>`. That's `animatedProps`, not `useAnimatedStyle`: react-native-svg's
+`G` takes `opacity`/`translateX`/`translateY`/`rotation`/`scale` as plain props and declares no
+`style`. Per-part motion (a head bob, an ear twitch, stretching a limb) is therefore a matter
+of naming the layer in Figma and passing a value — no new frame art, no dependency, and it
+stays on the UI thread, unlike interpolating these paths (some are ~50k characters) would.
+A few older paste-ins (`body/idle-1.svg`, `head/*.svg`, `variations/fighting/idle-1.svg`)
+exported without ids and can't be rigged until they're re-copied from Figma.
+
 `basic` lives under `frames-generated/body/` — the Figma section names the plain, costume-less
 capybara "body", but it is a complete character, not a headless torso (it is
 dimension-for-dimension identical to `fighting`, which is the same drawing plus a headband).
