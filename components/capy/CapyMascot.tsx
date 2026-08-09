@@ -12,25 +12,26 @@ import Animated, {
 import type { SvgProps } from 'react-native-svg';
 
 import { CrossfadeFrames } from './CrossfadeFrames';
-import { CapyMascotIcon } from './icons/CapyMascotIcon';
 import { LockedIcon } from './icons/LockedIcon';
+import * as BasicFrames from './frames-generated/body';
 import * as AvocadoFrames from './frames-generated/variations/avocado';
 import * as EggFrames from './frames-generated/variations/egg';
 import * as FightingFrames from './frames-generated/variations/fighting';
 import * as ToiletFrames from './frames-generated/variations/toilet';
 
 /**
- * Mood is expressed through motion rather than separate artwork — capy-ui
- * ships a single static mascot, so idle/working/paused/celebrating are the
- * same drawing under different animations.
+ * Mood drives which hand-drawn art state the companion shows, on top of a
+ * gentle motion pass that varies with how urgent the moment is.
  */
 export type CapyMood = 'idle' | 'working' | 'paused' | 'celebrating';
 
 /**
- * Which companion's art to render. 'basic' is the ported capy-ui mascot;
- * 'egg', 'fighting', 'toilet' and 'avocado' are self-contained compositions
- * sourced from the Figma "capy anim" frame library (each a full drawing —
- * body, costume and head already combined per frame, not layered here).
+ * Which companion's art to render. Every skin is a set of self-contained
+ * compositions from the Figma "capy anim" frame library — each frame is a
+ * full drawing with body, costume and head already combined, never layered
+ * here. 'basic' lives under frames-generated/body (the Figma section names
+ * the plain, costume-less capybara "body"; it is a whole character, not a
+ * headless torso).
  */
 export type CapySkin = 'basic' | 'egg' | 'fighting' | 'toilet' | 'avocado';
 
@@ -54,20 +55,67 @@ interface FrameSet {
   Dance2?: ComponentType<SvgProps>;
 }
 
-/** Skins with no mad/dance art yet (e.g. Toilet Capy) hold their idle pose regardless of mood. */
-function pickFrames(state: FrameState, frames: FrameSet): readonly [ComponentType<SvgProps>, ComponentType<SvgProps>] {
-  if (state === 'mad' && frames.Mad1 && frames.Mad2) return [frames.Mad1, frames.Mad2];
-  if (state === 'dance' && frames.Dance1 && frames.Dance2) return [frames.Dance1, frames.Dance2];
-  return [frames.Idle1, frames.Idle2];
+/**
+ * width / height of each skin's Figma frame export, so CrossfadeFrames can
+ * size proportionally from a single height prop.
+ *
+ * Keyed per *state*, not just per skin: a dancing capybara throws its arms
+ * out and its frames are meaningfully wider than its idle ones (130 vs 115
+ * for basic and fighting), while egg and avocado crouch shorter to dance
+ * (297 vs 308). Sizing every state at the idle ratio would letterbox the
+ * dance rather than let it spread.
+ */
+const FRAME_ASPECT_RATIO: Record<CapySkin, Record<FrameState, number>> = {
+  basic: { idle: 115 / 206, mad: 115 / 205, dance: 130 / 206 },
+  fighting: { idle: 115 / 206, mad: 115 / 205, dance: 130 / 206 },
+  egg: { idle: 234 / 308, mad: 234 / 297, dance: 234 / 297 },
+  avocado: { idle: 234 / 308, mad: 234 / 297, dance: 234 / 297 },
+  toilet: { idle: 249 / 276, mad: 249 / 276, dance: 249 / 276 },
+};
+
+const FRAME_SETS: Record<CapySkin, FrameSet> = {
+  basic: BasicFrames,
+  egg: EggFrames,
+  fighting: FightingFrames,
+  toilet: ToiletFrames,
+  avocado: AvocadoFrames,
+};
+
+export interface ResolvedArt {
+  /** The state actually rendered, which may differ from the one the mood asked for. */
+  state: FrameState;
+  frames: readonly [ComponentType<SvgProps>, ComponentType<SvgProps>];
+  aspectRatio: number;
 }
 
-/** width / height of each skin's Figma frame export, so CrossfadeFrames can size proportionally from a single height prop. */
-const FRAME_ASPECT_RATIO: Record<'avocado' | 'egg' | 'fighting' | 'toilet', number> = {
-  avocado: 234 / 308,
-  egg: 234 / 308,
-  fighting: 115 / 206,
-  toilet: 249 / 276,
-};
+/**
+ * Picks the frame pair and its matching proportions in one step.
+ *
+ * Not every skin has art for every mood — Toilet Capy is idle-only — so the
+ * requested state can fall back to idle. Resolving the frames and the aspect
+ * ratio together is what keeps a fallback from being drawn at the proportions
+ * of the state it failed to find.
+ */
+export function resolveArt(mood: CapyMood, skin: CapySkin): ResolvedArt {
+  const wanted = frameStateForMood(mood);
+  const frames = FRAME_SETS[skin];
+
+  const state: FrameState =
+    wanted === 'mad' && frames.Mad1 && frames.Mad2
+      ? 'mad'
+      : wanted === 'dance' && frames.Dance1 && frames.Dance2
+        ? 'dance'
+        : 'idle';
+
+  const pair =
+    state === 'mad'
+      ? ([frames.Mad1!, frames.Mad2!] as const)
+      : state === 'dance'
+        ? ([frames.Dance1!, frames.Dance2!] as const)
+        : ([frames.Idle1, frames.Idle2] as const);
+
+  return { state, frames: pair, aspectRatio: FRAME_ASPECT_RATIO[skin][state] };
+}
 
 /** A companion's `id` is a plain string in the store; an unrecognized one falls back to basic rather than crashing. */
 export function skinForCompanionId(id: string): CapySkin {
@@ -82,9 +130,24 @@ export interface CapyMascotProps {
   locked?: boolean;
 }
 
-const NATURAL_WIDTH = 110;
 const NATURAL_HEIGHT = 206;
 const LOCKED_OPACITY = 0.4;
+
+/**
+ * The widest state a skin ever reaches, so the container can be reserved once
+ * and stay put. Sizing it to the current state instead would make the layout
+ * lurch sideways the moment the capybara threw its arms out to dance.
+ */
+const WIDEST_ASPECT: Record<CapySkin, number> = Object.fromEntries(
+  Object.entries(FRAME_ASPECT_RATIO).map(([skin, states]) => [skin, Math.max(...Object.values(states))]),
+) as Record<CapySkin, number>;
+
+/** Faster crossfades read as more energy: a dance should flicker, a doze should drift. */
+const CYCLE_MS: Record<FrameState, number> = {
+  idle: 1800,
+  mad: 1100,
+  dance: 640,
+};
 
 export function CapyMascot({
   size = NATURAL_HEIGHT,
@@ -92,18 +155,19 @@ export function CapyMascot({
   skin = 'basic',
   locked = false,
 }: CapyMascotProps) {
-  const width = (size * NATURAL_WIDTH) / NATURAL_HEIGHT;
+  const art = resolveArt(mood, skin);
+  const containerWidth = size * WIDEST_ASPECT[skin];
 
   const bob = useSharedValue(0);
-  const tilt = useSharedValue(0);
 
   useEffect(() => {
     // Cancel whatever the previous mood was doing before starting the next.
     bob.value = withTiming(0, { duration: 150 });
-    tilt.value = withTiming(0, { duration: 150 });
 
+    // The drawn frames carry the mood now; this is just the breath underneath
+    // them. Working breathes faster than idle, which is the only thing that
+    // separates those two moods visually — they share the same art.
     if (mood === 'idle' || mood === 'working') {
-      // Slow breathing; working breathes a little faster.
       const duration = mood === 'working' ? 1600 : 2400;
       bob.value = withRepeat(
         withSequence(
@@ -113,10 +177,6 @@ export function CapyMascot({
         -1,
         false,
       );
-    }
-
-    if (mood === 'paused') {
-      tilt.value = withTiming(-4, { duration: 400, easing: Easing.out(Easing.quad) });
     }
 
     if (mood === 'celebrating') {
@@ -129,38 +189,26 @@ export function CapyMascot({
         false,
       );
     }
-  }, [mood, bob, tilt]);
+
+    // 'paused' deliberately holds still: the mad frames already say it, and
+    // tilting a drawing that is visibly cross reads as falling over.
+  }, [mood, bob]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: bob.value }, { rotate: `${tilt.value}deg` }],
+    transform: [{ translateY: bob.value }],
   }));
 
-  // Egg, Fighting, Toilet and Avocado are squarer compositions than the
-  // full-body mascot — scaled to roughly the same visual footprint rather
-  // than the same raw height, so none dwarfs the other companions.
-  const squareSize = Math.min(width, size) * 1.1;
-  const frameState = frameStateForMood(mood);
-
-  let art: React.ReactNode;
-  if (skin === 'egg' || skin === 'fighting' || skin === 'toilet' || skin === 'avocado') {
-    const frames =
-      skin === 'egg' ? EggFrames : skin === 'fighting' ? FightingFrames : skin === 'toilet' ? ToiletFrames : AvocadoFrames;
-    const [FrameA, FrameB] = pickFrames(frameState, frames);
-    art = (
-      <CrossfadeFrames
-        FrameA={FrameA}
-        FrameB={FrameB}
-        height={squareSize}
-        aspectRatio={FRAME_ASPECT_RATIO[skin]}
-      />
-    );
-  } else {
-    art = <CapyMascotIcon width={width} height={size} />;
-  }
-
   return (
-    <View style={[styles.container, { width, height: size }]}>
-      <Animated.View style={[animatedStyle, locked && styles.dimmed]}>{art}</Animated.View>
+    <View style={[styles.container, { width: containerWidth, height: size }]}>
+      <Animated.View style={[animatedStyle, locked && styles.dimmed]}>
+        <CrossfadeFrames
+          FrameA={art.frames[0]}
+          FrameB={art.frames[1]}
+          height={size}
+          aspectRatio={art.aspectRatio}
+          cycleDuration={CYCLE_MS[art.state]}
+        />
+      </Animated.View>
 
       {locked && (
         <View style={styles.lockOverlay}>

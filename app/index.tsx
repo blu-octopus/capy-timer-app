@@ -1,9 +1,10 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { CapyMascot, skinForCompanionId, type CapyMood } from '@/components/capy/CapyMascot';
+import { CompanionCarousel } from '@/components/capy/CompanionCarousel';
 import { Coin } from '@/components/capy/Coin';
 import { CoinWallet } from '@/components/capy/CoinWallet';
 import { PauseIcon } from '@/components/capy/icons/PauseIcon';
@@ -18,11 +19,13 @@ import { IconButton } from '@/components/ui/IconButton';
 import { Sparks } from '@/components/ui/Sparks';
 import { Text } from '@/components/ui/Text';
 import { TimerClock } from '@/components/ui/TimerClock';
+import { useRunFeedback } from '@/hooks/useRunFeedback';
 import { useRunTicker } from '@/hooks/useRunTicker';
 import { useSessionNotifications } from '@/hooks/useSessionNotifications';
+import { tapFeedback } from '@/src/feedback';
 import { useAppStore } from '@/src/store';
 import { resolvePosition } from '@/src/store/types';
-import { MESSAGE_INTERVAL_MS, messageFor } from '@/src/theme/messages';
+import { DIALOGUE_BUCKET_MS, dialogueFor } from '@/src/theme/messages';
 import { colors } from '@/src/theme/tokens';
 
 const PHASE_LABEL = {
@@ -34,6 +37,7 @@ const PHASE_LABEL = {
 export default function TimerScreen() {
   useRunTicker();
   useSessionNotifications();
+  useRunFeedback();
   const router = useRouter();
 
   const status = useAppStore((s) => s.status);
@@ -45,12 +49,15 @@ export default function TimerScreen() {
   const coins = useAppStore((s) => s.wallet.coins);
   const categories = useAppStore((s) => s.categories);
 
+  const companions = useAppStore((s) => s.companions);
   const startRun = useAppStore((s) => s.startRun);
   const pause = useAppStore((s) => s.pause);
   const resume = useAppStore((s) => s.resume);
   const skipPhase = useAppStore((s) => s.skipPhase);
   const abandonRun = useAppStore((s) => s.abandonRun);
   const reset = useAppStore((s) => s.reset);
+  const updatePlan = useAppStore((s) => s.updatePlan);
+  const unlockCompanion = useAppStore((s) => s.unlockCompanion);
 
   const isIdle = status === 'idle';
   const isRunning = status === 'running';
@@ -77,14 +84,71 @@ export default function TimerScreen() {
         ? 'working'
         : 'idle';
 
-  const [messageIndex, setMessageIndex] = useState(0);
+  // A run's own elapsed time drives the bubble while it ticks; idle and
+  // paused have no clock of their own, so they get a plain wall-clock counter
+  // to rotate on. Bucketing either source keeps the bubble from re-rendering
+  // on every one of the ticker's 250ms samples.
+  const [idleBucket, setIdleBucket] = useState(0);
   useEffect(() => {
-    if (!isRunning) return;
-    const id = setInterval(() => setMessageIndex((i) => i + 1), MESSAGE_INTERVAL_MS);
+    if (isRunning) return;
+    const id = setInterval(() => setIdleBucket((b) => b + 1), DIALOGUE_BUCKET_MS);
     return () => clearInterval(id);
   }, [isRunning]);
 
+  const dialogue = dialogueFor({
+    status,
+    phase,
+    progress: phaseDurationMs > 0 ? Math.min(1, msInPhase / phaseDurationMs) : 0,
+    msRemainingInPhase: Math.max(0, phaseDurationMs - msInPhase),
+    loop: (position?.segment?.loopIndex ?? 0) + 1,
+    totalLoops: plan.loops,
+    bucket: isRunning ? Math.floor(elapsedMs / DIALOGUE_BUCKET_MS) : idleBucket,
+  });
+
   const category = categories.find((c) => c.id === plan.categoryId);
+
+  // Browsing companions is an idle-only activity, so the carousel tracks its
+  // own position and only writes the plan for buddies that are unlocked —
+  // a locked one stays a preview you can look at but not adopt.
+  const planIndex = Math.max(0, companions.findIndex((c) => c.id === plan.companionId));
+  const [browseIndex, setBrowseIndex] = useState(planIndex);
+  const browsing = companions[browseIndex] ?? companions[planIndex];
+
+  const onBrowse = (next: number) => {
+    setBrowseIndex(next);
+    const companion = companions[next];
+    if (companion?.unlocked) updatePlan({ companionId: companion.id });
+  };
+
+  const onUnlock = () => {
+    if (!browsing) return;
+
+    if (coins < browsing.priceCoins) {
+      Alert.alert(
+        'Not enough coins',
+        `${browsing.name} costs ${browsing.priceCoins.toLocaleString('en-US')} coins. You have ${coins.toLocaleString('en-US')}.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Get coins', onPress: () => router.push('/iap') },
+        ],
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Unlock buddy?',
+      `Spend ${browsing.priceCoins.toLocaleString('en-US')} coins on ${browsing.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unlock',
+          onPress: () => {
+            if (unlockCompanion(browsing.id)) updatePlan({ companionId: browsing.id });
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
@@ -104,14 +168,20 @@ export default function TimerScreen() {
         ) : (
           <>
             <View style={styles.bubbleSlot}>
-              {(isRunning || isPaused) && (
-                <DialogueBubble>
-                  {isPaused ? '...' : messageFor(phase, messageIndex)}
-                </DialogueBubble>
-              )}
+              <DialogueBubble>{dialogue}</DialogueBubble>
             </View>
 
-            <CapyMascot size={190} mood={mood} skin={skinForCompanionId(plan.companionId)} />
+            {isIdle ? (
+              <CompanionCarousel
+                companions={companions}
+                index={browseIndex}
+                onIndexChange={onBrowse}
+                size={190}
+                showName={false}
+              />
+            ) : (
+              <CapyMascot size={190} mood={mood} skin={skinForCompanionId(plan.companionId)} />
+            )}
 
             <View style={styles.clockSlot}>
               {!isIdle && <Text variant="caption">{PHASE_LABEL[phase]}</Text>}
@@ -190,11 +260,33 @@ export default function TimerScreen() {
 
       <View style={styles.footer}>
         {isIdle ? (
-          <Button
-            label="Session Details"
-            variant="outlined"
-            onPress={() => router.push('/session-setup')}
-          />
+          browsing && !browsing.unlocked ? (
+            // The price replaces Session Details rather than sitting beside
+            // it: there's nothing to set up for a buddy you don't own yet.
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Unlock ${browsing.name} for ${browsing.priceCoins} coins`}
+              onPress={() => {
+                tapFeedback();
+                onUnlock();
+              }}
+              style={styles.unlockRow}
+            >
+              <Text variant="h1" style={styles.unlockText}>
+                unlock for
+              </Text>
+              <Coin size={20} />
+              <Text variant="h1" style={styles.unlockText}>
+                {browsing.priceCoins.toLocaleString('en-US')}
+              </Text>
+            </Pressable>
+          ) : (
+            <Button
+              label="Session Details"
+              variant="outlined"
+              onPress={() => router.push('/session-setup')}
+            />
+          )
         ) : (
           category && (
             <View style={styles.categoryPill}>
@@ -308,5 +400,14 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
+  },
+  unlockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  unlockText: {
+    fontSize: 18,
   },
 });

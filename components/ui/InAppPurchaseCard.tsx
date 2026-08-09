@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Coin } from '@/components/capy/Coin';
 import { RibbonIcon } from '@/components/capy/icons/RibbonIcon';
+import { tapFeedback } from '@/src/feedback';
 import { colors, seeds } from '@/src/theme/tokens';
 import { Text } from './Text';
 import { useMeasuredSize, WobbleBorder } from './WobbleBorder';
@@ -33,7 +34,10 @@ export function InAppPurchaseCard({
       accessibilityRole="button"
       accessibilityLabel={`${coins.toLocaleString('en-US')} coins for ${priceString}`}
       disabled={disabled}
-      onPress={onPress}
+      onPress={() => {
+        tapFeedback();
+        onPress();
+      }}
       style={({ pressed }) => [(pressed || disabled) && styles.dimmed]}
     >
       {featured ? <Featured coins={coins} priceString={priceString} /> : <Plain coins={coins} priceString={priceString} />}

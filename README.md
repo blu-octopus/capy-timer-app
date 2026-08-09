@@ -39,11 +39,21 @@ a quick internal layout check — this app is not shipped on web, and some
 native-only behavior (SQLite, real device notifications, IAP) intentionally
 doesn't run there.
 
+One web-only caveat worth knowing before you trust the preview: `onLayout`
+fires unreliably under react-native-web — it lands on the first load after a
+cold start, then stops on later reloads. Anything that measures itself before
+drawing is intermittently missing there, most visibly the hand-drawn wobble
+outlines on buttons, speech bubbles, and modal frames, which come and go
+between reloads. They render correctly on a device, so reload a couple of
+times before concluding the browser is showing you a real bug.
+
 ### What works in Expo Go
 
 - Timer engine, all four run states, session setup, companion unlocking
 - SQLite-backed session history and the statistics dashboard
 - Local notifications (scheduling, permission prompts, delivery)
+- Haptics and sound effects — these are device-only, so the browser preview
+  can't tell you anything about them
 
 ### What needs a custom dev build
 
@@ -110,14 +120,16 @@ this design doesn't need that anyway).
 ## Companions
 
 Coins unlock companion skins — `basic` (unlocked by default), `egg`,
-`fighting`, and `toilet` (see the coin shop / session setup carousel for
-prices). `egg`, `fighting`, and `toilet` render real hand-drawn art per mood
-(idle/paused/celebrating), sourced as pairs of frames exported from Figma and
-looped through a soft crossfade (`components/capy/CrossfadeFrames.tsx`) rather
-than a single static drawing. `basic` currently expresses mood through motion
-only (a breathing/tilt/bounce animation on one drawing) — see
-`components/capy/CapyMascot.tsx`. A fifth skin, `avocado`, has art ready but
-isn't wired into the purchasable roster yet.
+`fighting`, and `toilet`. Swipe or use the arrows on the timer screen to
+browse them; a locked buddy previews without being adopted, and its price
+replaces the Session Details button until you buy it.
+
+Every skin renders real hand-drawn art per mood — content while idle, cross
+while paused, dancing when a session lands — as pairs of frames exported from
+Figma and looped through a soft crossfade
+(`components/capy/CrossfadeFrames.tsx`) that runs faster the more animated the
+mood. A fifth skin, `avocado`, has art ready but isn't wired into the
+purchasable roster yet.
 
 The raw per-mood `.svg` frames live in `components/capy/frames/` (see its
 `README.md` for the paste-in convention if you're adding or updating art).
@@ -130,6 +142,42 @@ npm run frames
 This converts every `.svg` under `components/capy/frames/` into a
 `react-native-svg` TSX component under `components/capy/frames-generated/`
 (regenerated wholesale — don't hand-edit files there).
+
+The capybara also talks while the timer runs, and the line comes from where
+the session actually is — how far through the phase, how many minutes are
+left, which loop of how many — so the speech bubble keeps you oriented without
+making you read the clock. The wording lives in `src/theme/messages.ts`.
+
+## Setting up a session
+
+Tap **Session Details** on the timer screen to raise a sheet with the focus
+length, break length, and loop count as three wheels you flick through, all
+visible at once. The timer stays on screen behind the sheet.
+
+The wheel (`components/ui/OptionWheel.tsx`) is a hand-port of the React Bits
+web component of the same name: the curve geometry is the original's, while
+the parts that depended on the DOM are re-expressed with
+`react-native-gesture-handler` and Reanimated. Its progressive blur is
+deliberately left out — React Native has no per-view filter — and opacity plus
+a slight scale taper stand in.
+
+## Haptics and sound
+
+Every interaction fires a haptic and a short sound together through
+`src/feedback/`, including the ones you don't trigger yourself: crossing a
+phase boundary and finishing a session.
+
+The sounds are generated rather than sourced, so they're licence-free and
+tweakable in code:
+
+```bash
+npm run sfx
+```
+
+`scripts/generate-sfx.mjs` writes 16-bit PCM WAVs into `assets/sfx/` — soft
+sine blips with a fast attack and exponential decay, tuned to match the
+hand-drawn look rather than sound like UI beeps. Feedback degrades silently:
+haptics are skipped on web, and audio going missing never blocks a tap.
 
 ## Home screen widgets
 
@@ -231,13 +279,15 @@ components/capy/                    Ported capy-ui artwork (mascot, coin, icons)
 components/capy/frames/             Raw per-mood/per-frame companion SVGs, paste-in from Figma (see its README.md)
 components/capy/frames-generated/   React Native components generated from frames/ via `npm run frames`
 components/ui/                      Design system primitives (WobbleBorder, charts, Modal, ...)
+assets/sfx/                         Generated sound effects (see `npm run sfx`)
 src/store/                          Zustand store + the wall-clock timer engine
 src/db/                             SQLite schema, repository, and dashboard aggregations
 src/notifications/                  Per-phase-boundary local notifications
+src/feedback/                       Haptics + sound effects, fired together per interaction
 src/purchases/                      RevenueCat integration
 src/widgets/                        Shared snapshot + native bridge for both platforms' widgets
 src/sketch/                         Hand-drawn geometry engine, ported verbatim from capy-ui
-src/theme/                          Design tokens, typography, chart tick math
+src/theme/                          Design tokens, typography, chart tick math, capybara dialogue
 targets/widget/                     iOS WidgetKit extension source (@bacons/apple-targets)
-scripts/                            Codegen: app icons from capy art, companion frame SVG→TSX conversion
+scripts/                            Codegen: app icons, companion frames, sound effects
 ```

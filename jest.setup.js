@@ -44,6 +44,28 @@ jest.mock('expo-sqlite', () => ({
   openDatabaseAsync: jest.fn().mockRejectedValue(new Error('SQLite is not available in tests')),
 }));
 
+// Feedback is fire-and-forget decoration, so these model the "works fine"
+// case and tests assert on the calls rather than on any audible result.
+// src/feedback swallows every failure, so a throwing mock proves silence,
+// not breakage — feedback.test.ts overrides these to check that.
+jest.mock('expo-haptics', () => ({
+  impactAsync: jest.fn().mockResolvedValue(undefined),
+  selectionAsync: jest.fn().mockResolvedValue(undefined),
+  notificationAsync: jest.fn().mockResolvedValue(undefined),
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
+  NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
+}));
+
+jest.mock('expo-audio', () => ({
+  createAudioPlayer: jest.fn(() => ({
+    volume: 1,
+    play: jest.fn(),
+    seekTo: jest.fn(),
+    remove: jest.fn(),
+  })),
+  setAudioModeAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
 // Neither of these native modules exists in Expo Go, on either platform —
 // that's the whole point of the guarded-require pattern in src/widgets/.
 // Default mocks model the "present and working" case; bridge.test.ts

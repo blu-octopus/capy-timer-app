@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
+import { selectionFeedback } from '@/src/feedback';
 import { colors } from '@/src/theme/tokens';
 import { Text } from './Text';
 
@@ -75,7 +76,12 @@ export function SegmentedTabs<T extends string>({
             accessibilityRole="tab"
             accessibilityState={{ selected }}
             onLayout={(e) => handleTabLayout(option.value, e)}
-            onPress={() => onChange(option.value)}
+            onPress={() => {
+              // Re-tapping the active tab is a real gesture elsewhere (the
+              // stats Custom tab reopens its picker), so this fires either way.
+              selectionFeedback();
+              onChange(option.value);
+            }}
             style={styles.tab}
           >
             <Text

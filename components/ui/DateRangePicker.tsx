@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { BackIcon } from '@/components/capy/icons/BackIcon';
 import { NextIcon } from '@/components/capy/icons/NextIcon';
 import type { DateRange } from '@/src/db/stats';
+import { selectionFeedback } from '@/src/feedback';
 import { formatMonthTitle, monthGrid, normalizeDayRange } from '@/src/utils/calendar';
 import { colors } from '@/src/theme/tokens';
 import { IconButton } from './IconButton';
@@ -107,7 +108,10 @@ export function DateRangePicker({
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
                 accessibilityLabel={new Date(day.ts).toDateString()}
-                onPress={() => onTapDay(day.ts)}
+                onPress={() => {
+                  selectionFeedback();
+                  onTapDay(day.ts);
+                }}
                 style={[
                   styles.cell,
                   selected && styles.cellInRange,
