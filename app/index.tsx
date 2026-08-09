@@ -22,9 +22,10 @@ import { TimerClock } from '@/components/ui/TimerClock';
 import { useRunFeedback } from '@/hooks/useRunFeedback';
 import { useRunTicker } from '@/hooks/useRunTicker';
 import { useSessionNotifications } from '@/hooks/useSessionNotifications';
-import { tapFeedback } from '@/src/feedback';
+import { deniedFeedback, tapFeedback, unlockFeedback } from '@/src/feedback';
 import { useAppStore } from '@/src/store';
-import { resolvePosition } from '@/src/store/types';
+import { resolvePosition, totalPlanMinutes } from '@/src/store/types';
+import { formatDuration } from '@/src/theme/formatDuration';
 import { DIALOGUE_BUCKET_MS, dialogueFor } from '@/src/theme/messages';
 import { colors } from '@/src/theme/tokens';
 
@@ -107,6 +108,11 @@ export default function TimerScreen() {
 
   const category = categories.find((c) => c.id === plan.categoryId);
 
+  // What this whole sitting adds up to, named by whatever it was tagged as —
+  // the per-phase caption down by the clock only ever describes the segment
+  // running right now, so without this the total is invisible once you start.
+  const sessionSummary = `${category?.name ?? 'focus'} session · ${formatDuration(totalPlanMinutes(plan))}`;
+
   // Browsing companions is an idle-only activity, so the carousel tracks its
   // own position and only writes the plan for buddies that are unlocked —
   // a locked one stays a preview you can look at but not adopt.
@@ -124,6 +130,7 @@ export default function TimerScreen() {
     if (!browsing) return;
 
     if (coins < browsing.priceCoins) {
+      deniedFeedback();
       Alert.alert(
         'Not enough coins',
         `${browsing.name} costs ${browsing.priceCoins.toLocaleString('en-US')} coins. You have ${coins.toLocaleString('en-US')}.`,
@@ -143,7 +150,10 @@ export default function TimerScreen() {
         {
           text: 'Unlock',
           onPress: () => {
-            if (unlockCompanion(browsing.id)) updatePlan({ companionId: browsing.id });
+            if (unlockCompanion(browsing.id)) {
+              unlockFeedback();
+              updatePlan({ companionId: browsing.id });
+            }
           },
         },
       ],
@@ -160,6 +170,10 @@ export default function TimerScreen() {
           onPress={() => router.push('/stats')}
         />
         <CoinWallet amount={coins} onPress={() => router.push('/iap')} />
+      </View>
+
+      <View style={styles.sessionSummary}>
+        <Text variant="caption">{sessionSummary}</Text>
       </View>
 
       <View style={styles.body}>
@@ -184,7 +198,11 @@ export default function TimerScreen() {
             )}
 
             <View style={styles.clockSlot}>
-              {!isIdle && <Text variant="caption">{PHASE_LABEL[phase]}</Text>}
+              {!isIdle && (
+                <Text variant="caption">
+                  {PHASE_LABEL[phase]} · {Math.round(phaseDurationMs / 60000)} min
+                </Text>
+              )}
               <TimerClock seconds={displaySeconds} direction={plan.countDirection} />
               {(isRunning || isPaused) && plan.loops > 1 && (
                 <Text variant="caption">
@@ -310,7 +328,9 @@ function CompletionState({ coins, companionId }: { coins: number; companionId: s
             <Text variant="h1" style={styles.awardText}>
               +{coins}
             </Text>
-            <Sparks />
+            {/* Reaches out past the coin row to cover the mascot behind it —
+                finishing a session is the one burst that should feel big. */}
+            <Sparks scale={2.6} />
           </View>
         )}
       </View>
@@ -339,6 +359,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
   },
+  sessionSummary: {
+    alignItems: 'center',
+    paddingBottom: 4,
+  },
   body: {
     flex: 1,
     alignItems: 'center',
@@ -358,6 +382,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    // Clear of the mascot's ears: the slot bottom-aligns its contents, which
+    // otherwise parks the coin right on top of the capybara's head.
+    marginBottom: 24,
   },
   awardText: {
     fontSize: 20,

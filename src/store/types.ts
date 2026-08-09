@@ -121,10 +121,13 @@ export function resolvePosition(schedule: PhaseSegment[], elapsedMs: number): Sc
   };
 }
 
+/** Coins earned per whole minute of completed focus time. */
+export const COINS_PER_FOCUS_MINUTE = 10;
+
 /**
  * Coins are earned per whole minute of completed focus time. Break time and
  * prep pay nothing, so the reward tracks actual work.
  */
 export function coinsForFocusMs(focusMs: number): number {
-  return Math.floor(focusMs / 60000);
+  return Math.floor(focusMs / 60000) * COINS_PER_FOCUS_MINUTE;
 }

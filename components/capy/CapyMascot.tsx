@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { SvgProps } from 'react-native-svg';
 
-import { CrossfadeFrames } from './CrossfadeFrames';
+import { FrameLoop } from './FrameLoop';
 import { LockedIcon } from './icons/LockedIcon';
 import * as BasicFrames from './frames-generated/body';
 import * as AvocadoFrames from './frames-generated/variations/avocado';
@@ -56,7 +56,7 @@ interface FrameSet {
 }
 
 /**
- * width / height of each skin's Figma frame export, so CrossfadeFrames can
+ * width / height of each skin's Figma frame export, so FrameLoop can
  * size proportionally from a single height prop.
  *
  * Keyed per *state*, not just per skin: a dancing capybara throws its arms
@@ -201,7 +201,7 @@ export function CapyMascot({
   return (
     <View style={[styles.container, { width: containerWidth, height: size }]}>
       <Animated.View style={[animatedStyle, locked && styles.dimmed]}>
-        <CrossfadeFrames
+        <FrameLoop
           FrameA={art.frames[0]}
           FrameB={art.frames[1]}
           height={size}

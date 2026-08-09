@@ -11,13 +11,15 @@ import { Platform } from 'react-native';
  * with it. Both halves degrade independently — web gets sound but no haptics,
  * a device with the ringer off gets haptics but no sound.
  */
-export type FeedbackKind = 'tap' | 'selection' | 'phase' | 'success';
+export type FeedbackKind = 'tap' | 'selection' | 'phase' | 'success' | 'denied' | 'unlock';
 
 const SOUNDS: Record<FeedbackKind, number> = {
   tap: require('../../assets/sfx/tap.wav'),
   selection: require('../../assets/sfx/tick.wav'),
   phase: require('../../assets/sfx/phase.wav'),
   success: require('../../assets/sfx/complete.wav'),
+  denied: require('../../assets/sfx/denied.wav'),
+  unlock: require('../../assets/sfx/unlock.wav'),
 };
 
 const VOLUME: Record<FeedbackKind, number> = {
@@ -25,6 +27,8 @@ const VOLUME: Record<FeedbackKind, number> = {
   selection: 0.25,
   phase: 0.5,
   success: 0.6,
+  denied: 0.4,
+  unlock: 0.55,
 };
 
 /** Haptics has no web implementation, so skip the call rather than catch a throw per tap. */
@@ -100,7 +104,11 @@ function playHaptic(kind: FeedbackKind) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         break;
       case 'success':
+      case 'unlock':
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        break;
+      case 'denied':
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         break;
     }
   } catch {
@@ -121,6 +129,10 @@ export const selectionFeedback = () => playFeedback('selection');
 export const phaseFeedback = () => playFeedback('phase');
 /** Finishing a whole session. */
 export const successFeedback = () => playFeedback('success');
+/** A blocked action — e.g. trying to unlock a companion without enough coins. */
+export const deniedFeedback = () => playFeedback('denied');
+/** Successfully spending coins to unlock a companion. */
+export const unlockFeedback = () => playFeedback('unlock');
 
 /** Releases cached players. Exported for tests; the app holds these for its lifetime. */
 export function resetFeedback() {

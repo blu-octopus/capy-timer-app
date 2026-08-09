@@ -38,6 +38,35 @@ here; run `npm run frames` afterward (`scripts/generate-capy-frames.mjs`) to con
 `components/capy/frames-generated/` (mirrored directory structure, one component per file).
 Don't hand-edit anything under `frames-generated/` — it's regenerated wholesale, not merged.
 
+## Name your layers in Figma — they become the animation rig
+
+Figma writes each layer's name into the export as `<g id="...">`, and the generator keeps
+those groups intact (it disables the SVGO passes that would otherwise flatten them —
+`scripts/capy-frames.svgo.config.json`). Every named group becomes an addressable part on the
+generated component:
+
+```tsx
+const headProps = useAnimatedProps<GProps>(() => ({ translateY: bob.value }));
+<SvgIdle2 parts={{ head: headProps }} />
+```
+
+So a layer named `head` in Figma is animatable by that exact name, with no code generation
+step to re-run and nothing to register. Note it's `animatedProps`, built with
+`useAnimatedProps<GProps>` — *not* `useAnimatedStyle`: react-native-svg's `G` takes
+`opacity`/`translateX`/`translateY`/`rotation`/`scale` as plain props and has no `style`.
+
+Two things follow from this:
+
+- **Name the parts you might want to move** (`head`, `lower body`, `left ear`, `arm`…). A few
+  older paste-ins — `body/idle-1.svg`, `head/*.svg`, `variations/fighting/idle-1.svg` — came
+  across with no ids at all and can't be rigged until they're re-copied from Figma the way
+  `idle-2` was.
+- **Keep joint overlaps as their own shapes.** If a part will move independently, draw the
+  seam where it meets its neighbour as a small shape unioned into *both* silhouettes, rather
+  than booleaning the whole limb into one continuous outline. A part that shares an outline
+  with the body can't be pulled away from it without tearing a visible gap; an overlapping
+  joint keeps the fuzzy stroke reading as continuous while the part moves.
+
 ## Adding a new variation
 
 Add a folder under `variations/` with whichever state files that skin needs (see above —

@@ -102,10 +102,24 @@ describe('feedback', () => {
     playFeedback('selection');
     playFeedback('phase');
     playFeedback('success');
+    playFeedback('denied');
+    playFeedback('unlock');
 
     const sources = mockCreateAudioPlayer.mock.calls.map(([source]) => source);
-    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(4);
+    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(6);
     expect(new Set(sources).size).toBeGreaterThan(0);
-    expect(Haptics.notificationAsync).toHaveBeenCalledTimes(2);
+    expect(Haptics.notificationAsync).toHaveBeenCalledTimes(4);
+  });
+
+  it('uses the error notification haptic for a blocked action, distinct from success', () => {
+    playFeedback('denied');
+
+    expect(Haptics.notificationAsync).toHaveBeenCalledWith(Haptics.NotificationFeedbackType.Error);
+  });
+
+  it('uses the success notification haptic for a companion unlock', () => {
+    playFeedback('unlock');
+
+    expect(Haptics.notificationAsync).toHaveBeenCalledWith(Haptics.NotificationFeedbackType.Success);
   });
 });

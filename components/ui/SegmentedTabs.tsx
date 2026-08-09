@@ -112,7 +112,11 @@ const styles = StyleSheet.create({
   indicator: {
     position: 'absolute',
     top: TRACK_PADDING,
-    left: TRACK_PADDING,
+    // No `left` inset: each tab's measured x is already relative to the
+    // track's padded content box, so translateX carries the full offset.
+    // Adding TRACK_PADDING on top of it shifted the pill a padding's width
+    // right of its label and pushed the last tab over the track's edge.
+    left: 0,
     height: INDICATOR_HEIGHT,
     borderRadius: INDICATOR_HEIGHT / 2,
     backgroundColor: colors.white,
