@@ -4,8 +4,9 @@
  * timer.test.ts; this file is about what actually reaches the screen.
  */
 
-import { act, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
+import { Alert } from 'react-native';
 
 import TimerScreen from '@/app/index';
 import { useAppStore } from '@/src/store';
@@ -15,11 +16,24 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
 }));
 
-const COMPANIONS: Companion[] = [{ id: 'basic', name: 'Basic Capy', unlocked: true, priceCoins: 0 }];
+const mockDeniedFeedback = jest.fn();
+const mockUnlockFeedback = jest.fn();
+jest.mock('@/src/feedback', () => ({
+  ...jest.requireActual('@/src/feedback'),
+  deniedFeedback: () => mockDeniedFeedback(),
+  unlockFeedback: () => mockUnlockFeedback(),
+}));
+
+const COMPANIONS: Companion[] = [
+  { id: 'basic', name: 'Basic Capy', unlocked: true, priceCoins: 0 },
+  { id: 'egg', name: 'Egg Capy', unlocked: false, priceCoins: 500 },
+];
 const T0 = 1_800_000_000_000;
 const MIN = 60 * 1000;
 
 beforeEach(() => {
+  mockDeniedFeedback.mockClear();
+  mockUnlockFeedback.mockClear();
   useAppStore.setState({
     status: 'idle',
     plan: {
@@ -117,6 +131,42 @@ describe('timer screen session summary', () => {
     renderIdle();
 
     expect(screen.getByText('focus session · 1 hr 5 min')).toBeTruthy();
+  });
+});
+
+describe('timer screen companion unlock feedback', () => {
+  function browseToEgg() {
+    renderIdle();
+    act(() => fireEvent.press(screen.getByLabelText('Next buddy')));
+  }
+
+  it('plays denied feedback and skips the confirm alert when coins are short', () => {
+    act(() => useAppStore.setState({ wallet: { coins: 100 } })); // egg costs 500
+    browseToEgg();
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    act(() => fireEvent.press(screen.getByLabelText('Unlock Egg Capy for 500 coins')));
+
+    expect(mockDeniedFeedback).toHaveBeenCalledTimes(1);
+    expect(mockUnlockFeedback).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith('Not enough coins', expect.any(String), expect.anything());
+  });
+
+  it('plays unlock feedback once the purchase actually succeeds, not on the opening tap', () => {
+    act(() => useAppStore.setState({ wallet: { coins: 1000 } }));
+    browseToEgg();
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_title, _msg, buttons) => {
+      // Simulate tapping the "Unlock" button in the confirm dialog.
+      const unlockButton = buttons?.find((b) => b.text === 'Unlock');
+      unlockButton?.onPress?.();
+    });
+
+    act(() => fireEvent.press(screen.getByLabelText('Unlock Egg Capy for 500 coins')));
+
+    expect(alertSpy).toHaveBeenCalledWith('Unlock buddy?', expect.any(String), expect.anything());
+    expect(mockUnlockFeedback).toHaveBeenCalledTimes(1);
+    expect(mockDeniedFeedback).not.toHaveBeenCalled();
+    expect(useAppStore.getState().companions.find((c) => c.id === 'egg')?.unlocked).toBe(true);
   });
 });
 

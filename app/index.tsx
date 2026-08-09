@@ -22,7 +22,7 @@ import { TimerClock } from '@/components/ui/TimerClock';
 import { useRunFeedback } from '@/hooks/useRunFeedback';
 import { useRunTicker } from '@/hooks/useRunTicker';
 import { useSessionNotifications } from '@/hooks/useSessionNotifications';
-import { tapFeedback } from '@/src/feedback';
+import { deniedFeedback, tapFeedback, unlockFeedback } from '@/src/feedback';
 import { useAppStore } from '@/src/store';
 import { resolvePosition, totalPlanMinutes } from '@/src/store/types';
 import { formatDuration } from '@/src/theme/formatDuration';
@@ -130,6 +130,7 @@ export default function TimerScreen() {
     if (!browsing) return;
 
     if (coins < browsing.priceCoins) {
+      deniedFeedback();
       Alert.alert(
         'Not enough coins',
         `${browsing.name} costs ${browsing.priceCoins.toLocaleString('en-US')} coins. You have ${coins.toLocaleString('en-US')}.`,
@@ -149,7 +150,10 @@ export default function TimerScreen() {
         {
           text: 'Unlock',
           onPress: () => {
-            if (unlockCompanion(browsing.id)) updatePlan({ companionId: browsing.id });
+            if (unlockCompanion(browsing.id)) {
+              unlockFeedback();
+              updatePlan({ companionId: browsing.id });
+            }
           },
         },
       ],
