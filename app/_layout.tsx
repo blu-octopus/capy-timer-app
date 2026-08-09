@@ -14,6 +14,7 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -56,20 +57,37 @@ export default function RootLayout() {
   if (!loaded) return null;
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider value={CapyTheme}>
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.white } }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="session-setup" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="stats" />
-          <Stack.Screen
-            name="iap"
-            options={{ presentation: 'transparentModal', animation: 'fade' }}
-          />
-          <Stack.Screen name="+not-found" options={{ headerShown: true }} />
-        </Stack>
-        <StatusBar style="dark" />
-      </ThemeProvider>
-    </SafeAreaProvider>
+    // Required ancestor for every GestureDetector in the app — the session
+    // sheet's option wheels are the first thing to need one.
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <ThemeProvider value={CapyTheme}>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.white } }}>
+            <Stack.Screen name="index" />
+            {/* A sheet rather than a full screen: the timer stays visible
+                behind it, so changing a duration reads as adjusting the
+                session you're looking at rather than visiting a settings
+                page. formSheet detents are iOS-native and degrade to a
+                standard modal elsewhere. */}
+            <Stack.Screen
+              name="session-setup"
+              options={{
+                presentation: 'formSheet',
+                sheetAllowedDetents: [0.72, 1],
+                sheetGrabberVisible: true,
+                sheetCornerRadius: 28,
+              }}
+            />
+            <Stack.Screen name="stats" />
+            <Stack.Screen
+              name="iap"
+              options={{ presentation: 'transparentModal', animation: 'fade' }}
+            />
+            <Stack.Screen name="+not-found" options={{ headerShown: true }} />
+          </Stack>
+          <StatusBar style="dark" />
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
