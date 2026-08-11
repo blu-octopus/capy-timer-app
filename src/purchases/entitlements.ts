@@ -11,6 +11,30 @@ import { ensurePurchasesConfigured } from './index';
  */
 export const PREMIUM_ENTITLEMENT_ID = 'premium';
 
+/** Distinguishes "we know they are not premium" from "we could not ask". */
+export type PremiumLookup = { kind: 'active' } | { kind: 'inactive' } | { kind: 'unknown' };
+
+/**
+ * Three-way lookup so a failed network call cannot wipe a persisted
+ * `isPremium: true`. `hasPremium` stays fail-closed for callers that need a boolean.
+ */
+export async function lookupPremium(): Promise<PremiumLookup> {
+  if (isPremiumForced()) return { kind: 'active' };
+
+  const status = ensurePurchasesConfigured();
+  if (!status.available) return { kind: 'unknown' };
+
+  try {
+    const customerInfo = await Purchases.getCustomerInfo();
+    return customerInfo.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined
+      ? { kind: 'active' }
+      : { kind: 'inactive' };
+  } catch (error) {
+    console.warn('[purchases] getCustomerInfo failed', error);
+    return { kind: 'unknown' };
+  }
+}
+
 /**
  * Whether the customer currently has premium.
  *
@@ -25,16 +49,6 @@ export const PREMIUM_ENTITLEMENT_ID = 'premium';
  * Go, which is why the dev override exists (see `isPremiumForced`).
  */
 export async function hasPremium(): Promise<boolean> {
-  if (isPremiumForced()) return true;
-
-  const status = ensurePurchasesConfigured();
-  if (!status.available) return false;
-
-  try {
-    const customerInfo = await Purchases.getCustomerInfo();
-    return customerInfo.entitlements.active[PREMIUM_ENTITLEMENT_ID] !== undefined;
-  } catch (error) {
-    console.warn('[purchases] getCustomerInfo failed', error);
-    return false;
-  }
+  const lookup = await lookupPremium();
+  return lookup.kind === 'active';
 }

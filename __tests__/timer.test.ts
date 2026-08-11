@@ -7,9 +7,12 @@
 import { recordSession } from '@/src/db/sessions';
 import { useAppStore } from '@/src/store';
 import {
+  applyDailyCap,
   buildSchedule,
   coinsForFocusMs,
+  DAILY_PAID_FOCUS_MS,
   resolvePosition,
+  startOfLocalDay,
   totalPlanMinutes,
   PREP_MS,
   type SessionPlan,
@@ -46,8 +49,12 @@ function setup(planOverrides: Partial<SessionPlan> = {}) {
     status: 'idle',
     elapsedMs: 0,
     coinsAwarded: 0,
+    coinsCapped: false,
     skipped: false,
     schedule: [],
+    paidFocusMsToday: 0,
+    paidFocusDay: 0,
+    fulfilledPurchaseIds: [],
   });
   return useAppStore.getState();
 }
@@ -120,7 +127,55 @@ describe('coinsForFocusMs', () => {
   });
 });
 
+describe('applyDailyCap', () => {
+  it('pays the full run when under the daily allowance', () => {
+    const result = applyDailyCap(40 * MIN, { paidFocusMsToday: 0, paidFocusDay: 0 }, T0);
+    expect(result.coins).toBe(400);
+    expect(result.capped).toBe(false);
+    expect(result.nextDaily.paidFocusMsToday).toBe(40 * MIN);
+  });
+
+  it('withholds coins once 3 hours of focus have already paid', () => {
+    const today = startOfLocalDay(T0);
+    const result = applyDailyCap(20 * MIN, {
+      paidFocusMsToday: DAILY_PAID_FOCUS_MS,
+      paidFocusDay: today,
+    }, T0);
+    expect(result.coins).toBe(0);
+    expect(result.capped).toBe(true);
+  });
+
+  it('rolls the allowance over at local midnight', () => {
+    const yesterday = startOfLocalDay(T0) - 24 * 60 * MIN;
+    const result = applyDailyCap(20 * MIN, {
+      paidFocusMsToday: DAILY_PAID_FOCUS_MS,
+      paidFocusDay: yesterday,
+    }, T0);
+    expect(result.coins).toBe(200);
+    expect(result.capped).toBe(false);
+  });
+});
+
 describe('timer run', () => {
+  it('does not restart a live run', () => {
+    setup().startRun(T0);
+    const runId = useAppStore.getState().runId;
+    useAppStore.getState().startRun(T0 + MIN);
+    expect(useAppStore.getState().runId).toBe(runId);
+    expect(useAppStore.getState().startedAt).toBe(T0);
+  });
+
+  it('stops paying after 3 hours of focus in a local day', () => {
+    setup({ focusMin: 120, breakMin: 0, loops: 2 }).startRun(T0);
+    useAppStore.getState().tick(T0 + 240 * MIN);
+
+    const state = useAppStore.getState();
+    expect(state.status).toBe('ended');
+    expect(state.coinsAwarded).toBe(1800);
+    expect(state.coinsCapped).toBe(true);
+    expect(state.wallet.coins).toBe(2000);
+  });
+
   it('starts in prep when enabled, focus otherwise', () => {
     setup().startRun(T0);
     expect(useAppStore.getState().phase).toBe('focus');
@@ -381,6 +436,16 @@ describe('run persistence and recovery', () => {
       skipped: 1,
       finishedAt: T0 + 9 * MIN,
     });
+  });
+});
+
+describe('fulfillPurchase', () => {
+  it('credits once per transaction id', () => {
+    setup();
+    expect(useAppStore.getState().fulfillPurchase('txn_1', 1000)).toBe(true);
+    expect(useAppStore.getState().wallet.coins).toBe(1200);
+    expect(useAppStore.getState().fulfillPurchase('txn_1', 1000)).toBe(false);
+    expect(useAppStore.getState().wallet.coins).toBe(1200);
   });
 });
 

@@ -35,11 +35,16 @@ function ensureAndroidChannel(): Promise<void> {
   return channelReady;
 }
 
+let askedThisSession = false;
+
 export async function ensureNotificationPermission(): Promise<boolean> {
   const settings = await Notifications.getPermissionsAsync();
   if (settings.granted) return true;
   if (settings.canAskAgain === false) return false;
+  // One OS prompt per process — phase changes must not re-fire the dialog.
+  if (askedThisSession) return false;
 
+  askedThisSession = true;
   const request = await Notifications.requestPermissionsAsync();
   return request.granted;
 }
@@ -65,6 +70,12 @@ function boundaryContent(
     return {
       title: 'Prep is done — time to focus',
       body: 'Your capybara is settling in to work.',
+    };
+  }
+  if (segment.phase === 'focus' && next.phase === 'focus') {
+    return {
+      title: 'Loop complete — next focus',
+      body: 'Your capybara is ready for another round.',
     };
   }
   return {

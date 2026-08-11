@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { CoinWallet } from '@/components/capy/CoinWallet';
@@ -12,6 +12,7 @@ import {
   getCoinOfferings,
   purchaseCoins,
   restorePurchases,
+  subscribeToPurchaseUpdates,
   type CoinOffering,
 } from '@/src/purchases';
 import { tapFeedback } from '@/src/feedback';
@@ -23,16 +24,18 @@ type LoadState =
   | { kind: 'loading' }
   | { kind: 'unavailable'; message: string }
   | { kind: 'ready'; offerings: CoinOffering[] }
-  | { kind: 'empty' };
+  | { kind: 'empty' }
+  | { kind: 'error'; message: string };
 
 export default function IapScreen() {
   const router = useRouter();
   const coins = useAppStore((s) => s.wallet.coins);
-  const addCoins = useAppStore((s) => s.addCoins);
+  const fulfillPurchase = useAppStore((s) => s.fulfillPurchase);
   const syncPremium = useAppStore((s) => s.syncPremium);
   const { size, onLayout } = useMeasuredSize();
 
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
+  const purchasingIdRef = useRef<string | null>(null);
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
   const [restoring, setRestoring] = useState(false);
 
@@ -43,29 +46,54 @@ export default function IapScreen() {
       return;
     }
 
-    const offerings = await getCoinOfferings();
-    setState(offerings.length > 0 ? { kind: 'ready', offerings } : { kind: 'empty' });
+    try {
+      const offerings = await getCoinOfferings();
+      setState(offerings.length > 0 ? { kind: 'ready', offerings } : { kind: 'empty' });
+    } catch {
+      setState({
+        kind: 'error',
+        message: "Couldn't load the shop. Check your connection and try again.",
+      });
+    }
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    return subscribeToPurchaseUpdates((transactionId, amount) => {
+      const credited = fulfillPurchase(transactionId, amount);
+      if (credited) {
+        void syncPremium();
+        Alert.alert('Thanks!', `+${amount.toLocaleString('en-US')} coins added.`);
+      }
+      return credited;
+    });
+  }, [fulfillPurchase, syncPremium]);
+
   const onBuy = async (offering: CoinOffering) => {
+    if (purchasingIdRef.current) return;
+    purchasingIdRef.current = offering.product.id;
     setPurchasingId(offering.product.id);
     const result = await purchaseCoins(offering);
+    purchasingIdRef.current = null;
     setPurchasingId(null);
 
     if (result.outcome === 'success') {
-      addCoins(result.coinsAwarded);
-      // Coin packs grant no entitlement today, but re-reading is cheap and
-      // means a premium SKU added to this screen later needs no new wiring.
+      const credited = fulfillPurchase(result.transactionId, result.coinsAwarded);
       void syncPremium();
-      Alert.alert('Thanks!', `+${result.coinsAwarded.toLocaleString('en-US')} coins added.`);
+      if (credited) {
+        Alert.alert('Thanks!', `+${result.coinsAwarded.toLocaleString('en-US')} coins added.`);
+      }
+    } else if (result.outcome === 'pending') {
+      Alert.alert(
+        'Purchase pending',
+        'Coins will be added once this purchase is approved.',
+      );
     } else if (result.outcome === 'error') {
       Alert.alert('Purchase failed', result.message);
     }
-    // 'cancelled' needs no message — the user backed out on purpose.
   };
 
   const onRestore = async () => {
@@ -123,6 +151,15 @@ export default function IapScreen() {
           </Text>
         )}
 
+        {state.kind === 'error' && (
+          <View style={styles.errorBlock}>
+            <Text variant="body" style={styles.centerText}>
+              {state.message}
+            </Text>
+            <Button label="Try again" variant="ghost" onPress={() => void load()} />
+          </View>
+        )}
+
         {state.kind === 'ready' && (
           <View style={styles.tiers}>
             {state.offerings.map((offering) => (
@@ -146,7 +183,7 @@ export default function IapScreen() {
           <Button
             label={restoring ? 'Restoring...' : 'Restore Purchases'}
             variant="ghost"
-            disabled={restoring}
+            disabled={restoring || purchasingId !== null}
             onPress={() => void onRestore()}
           />
         )}
@@ -191,5 +228,10 @@ const styles = StyleSheet.create({
   },
   thanks: {
     textAlign: 'center',
+  },
+  errorBlock: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 8,
   },
 });

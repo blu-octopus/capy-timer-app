@@ -46,6 +46,7 @@ export default function TimerScreen() {
   const elapsedMs = useAppStore((s) => s.elapsedMs);
   const schedule = useAppStore((s) => s.schedule);
   const coinsAwarded = useAppStore((s) => s.coinsAwarded);
+  const coinsCapped = useAppStore((s) => s.coinsCapped);
   const plan = useAppStore((s) => s.plan);
   const coins = useAppStore((s) => s.wallet.coins);
   const categories = useAppStore((s) => s.categories);
@@ -178,7 +179,11 @@ export default function TimerScreen() {
 
       <View style={styles.body}>
         {isEnded ? (
-          <CompletionState coins={coinsAwarded} companionId={plan.companionId} />
+          <CompletionState
+            coins={coinsAwarded}
+            capped={coinsCapped}
+            companionId={plan.companionId}
+          />
         ) : (
           <>
             <View style={styles.bubbleSlot}>
@@ -318,7 +323,15 @@ export default function TimerScreen() {
   );
 }
 
-function CompletionState({ coins, companionId }: { coins: number; companionId: string }) {
+function CompletionState({
+  coins,
+  capped,
+  companionId,
+}: {
+  coins: number;
+  capped: boolean;
+  companionId: string;
+}) {
   return (
     <>
       <View style={styles.awardSlot}>
@@ -341,7 +354,9 @@ function CompletionState({ coins, companionId }: { coins: number; companionId: s
         <Text variant="h1" style={styles.congrats}>
           You did it!
         </Text>
-        <Text variant="body">start another session?</Text>
+        <Text variant="body">
+          {capped ? 'daily coin cap reached — extra focus still counts' : 'start another session?'}
+        </Text>
       </View>
     </>
   );

@@ -11,6 +11,7 @@ import type { PurchasesStatus } from './types';
 export type { PurchasesStatus, UnavailableReason } from './types';
 
 let status: PurchasesStatus | null = null;
+const pendingProductSince = new Map<string, number>();
 
 function apiKeyForPlatform(): string {
   if (Platform.OS === 'ios') return getIosApiKey();
@@ -50,6 +51,7 @@ export function ensurePurchasesConfigured(): PurchasesStatus {
 /** Test-only: clears the cached outcome so each test configures fresh. */
 export function resetPurchasesStatusForTests(): void {
   status = null;
+  pendingProductSince.clear();
 }
 
 export interface CoinOffering {
@@ -69,41 +71,107 @@ export async function getCoinOfferings(): Promise<CoinOffering[]> {
   const s = ensurePurchasesConfigured();
   if (!s.available) return [];
 
-  try {
-    const offerings = await Purchases.getOfferings();
-    const current = offerings.current;
-    if (!current) return [];
+  const offerings = await Purchases.getOfferings();
+  const current = offerings.current;
+  if (!current) return [];
 
-    const matched: CoinOffering[] = [];
-    for (const product of COIN_PRODUCTS) {
-      const pkg = current.availablePackages.find((p) => p.product.identifier === product.id);
-      if (pkg) matched.push({ product, pkg, priceString: pkg.product.priceString });
-    }
-    return matched;
-  } catch (error) {
-    console.warn('[purchases] getOfferings failed', error);
-    return [];
+  const matched: CoinOffering[] = [];
+  for (const product of COIN_PRODUCTS) {
+    const pkg = current.availablePackages.find((p) => p.product.identifier === product.id);
+    if (pkg) matched.push({ product, pkg, priceString: pkg.product.priceString });
   }
+  return matched;
+}
+
+type NonSubTxn = {
+  productIdentifier?: string;
+  transactionIdentifier?: string;
+  purchaseDate?: string;
+};
+
+type CustomerInfoLike = { nonSubscriptionTransactions?: NonSubTxn[] };
+
+function extractTransactionId(
+  result: { customerInfo?: CustomerInfoLike },
+  productId: string,
+): string | null {
+  const txns = result.customerInfo?.nonSubscriptionTransactions;
+  if (!Array.isArray(txns)) return null;
+
+  for (let i = txns.length - 1; i >= 0; i--) {
+    const txn = txns[i]!;
+    if (txn.productIdentifier !== productId) continue;
+    if (txn.transactionIdentifier) return txn.transactionIdentifier;
+    if (txn.purchaseDate) return `${productId}:${txn.purchaseDate}`;
+  }
+  return null;
 }
 
 export type PurchaseResult =
-  | { outcome: 'success'; coinsAwarded: number }
+  | { outcome: 'success'; coinsAwarded: number; transactionId: string }
+  | { outcome: 'pending' }
   | { outcome: 'cancelled' }
   | { outcome: 'error'; message: string };
 
 export async function purchaseCoins(offering: CoinOffering): Promise<PurchaseResult> {
   try {
-    await Purchases.purchasePackage(offering.pkg);
-    return { outcome: 'success', coinsAwarded: offering.product.coins };
+    const result = await Purchases.purchasePackage(offering.pkg);
+    const transactionId =
+      extractTransactionId(result, offering.product.id) ??
+      `${offering.product.id}:${Date.now()}`;
+    return { outcome: 'success', coinsAwarded: offering.product.coins, transactionId };
   } catch (error) {
-    const code = (error as { code?: PURCHASES_ERROR_CODE })?.code;
+    const code = (error as { code?: PURCHASES_ERROR_CODE | string })?.code;
     if (code === PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR) {
       return { outcome: 'cancelled' };
+    }
+    if (String(code).includes('PENDING')) {
+      pendingProductSince.set(offering.product.id, Date.now());
+      return { outcome: 'pending' };
     }
     console.warn('[purchases] purchase failed', error);
     const message = error instanceof Error ? error.message : 'Purchase failed';
     return { outcome: 'error', message };
   }
+}
+
+/**
+ * Ask-to-Buy / pending purchases land later via CustomerInfo updates.
+ * Only products this process marked pending are fulfilled, so a listener
+ * fire on launch cannot replay the entire consumable history.
+ */
+export function subscribeToPurchaseUpdates(
+  fulfill: (transactionId: string, coins: number) => boolean,
+): () => void {
+  if (!ensurePurchasesConfigured().available) return () => undefined;
+
+  const listener = (info: CustomerInfoLike) => {
+    const txns = info.nonSubscriptionTransactions;
+    if (!Array.isArray(txns)) return;
+
+    for (const txn of txns) {
+      const productId = txn.productIdentifier;
+      if (!productId) continue;
+      const since = pendingProductSince.get(productId);
+      if (since == null) continue;
+      const purchasedAt = txn.purchaseDate ? Date.parse(txn.purchaseDate) : NaN;
+      if (Number.isFinite(purchasedAt) && purchasedAt + 5000 < since) continue;
+
+      const product = COIN_PRODUCTS.find((p) => p.id === productId);
+      if (!product) continue;
+      const transactionId = txn.transactionIdentifier ?? `${productId}:${txn.purchaseDate ?? since}`;
+      if (fulfill(transactionId, product.coins)) {
+        pendingProductSince.delete(productId);
+      }
+    }
+  };
+
+  Purchases.addCustomerInfoUpdateListener(listener as never);
+  return () => {
+    const remove = (Purchases as { removeCustomerInfoUpdateListener?: (l: typeof listener) => void })
+      .removeCustomerInfoUpdateListener;
+    remove?.(listener);
+  };
 }
 
 export type RestoreResult =

@@ -49,8 +49,11 @@ beforeEach(() => {
     categories: [],
     elapsedMs: 0,
     coinsAwarded: 0,
+    coinsCapped: false,
     skipped: false,
     schedule: [],
+    paidFocusMsToday: 0,
+    paidFocusDay: 0,
   });
 });
 
@@ -179,5 +182,19 @@ describe('timer screen coin award', () => {
 
     // 40 focus minutes * 10 coins/min.
     expect(screen.getByText('+400')).toBeTruthy();
+  });
+
+  it('says the daily cap was reached when extra focus paid nothing', () => {
+    renderIdle();
+    act(() =>
+      useAppStore.setState({
+        paidFocusMsToday: 3 * 60 * MIN,
+        paidFocusDay: new Date(T0).setHours(0, 0, 0, 0),
+      }),
+    );
+    act(() => useAppStore.getState().startRun(T0));
+    act(() => useAppStore.getState().tick(T0 + 60 * MIN));
+
+    expect(screen.getByText(/daily coin cap reached/i)).toBeTruthy();
   });
 });

@@ -143,7 +143,7 @@ export default function StatsScreen() {
           />
           <TrendCard
             title="Most Common Tag"
-            stats={[{ value: slices.length, unit: topCategory?.label ?? '—' }]}
+            stats={[{ value: topCategory?.label ?? '—' }]}
           />
         </View>
 
@@ -167,10 +167,10 @@ export default function StatsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text variant="h2">Support the Creator</Text>
-          <Text variant="body">Buy me boba</Text>
+          <Text variant="h2">Coin shop</Text>
+          <Text variant="body">Unlock companions with coins</Text>
           <Text variant="caption">
-            In-app purchases help keep the capybaras fed.
+            Purchases buy in-app items. They are not donations.
           </Text>
           <View style={styles.supportRow}>
             <Text variant="body" style={styles.link} onPress={() => router.push('/iap')}>

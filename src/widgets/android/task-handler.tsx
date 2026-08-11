@@ -27,9 +27,17 @@ async function handleBatteryWidget({ renderWidget }: WidgetTaskHandlerProps) {
   renderWidget(renderBatteryWidget(level >= 0 ? Math.round(level * 100) : null));
 }
 
+function parseSnapshot(raw: string | null): WidgetSnapshot | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as WidgetSnapshot;
+  } catch {
+    return null;
+  }
+}
+
 async function handleClockWidget({ renderWidget }: WidgetTaskHandlerProps) {
-  const raw = await AsyncStorage.getItem(ANDROID_SNAPSHOT_KEY);
-  const snapshot: WidgetSnapshot | null = raw ? JSON.parse(raw) : null;
+  const snapshot = parseSnapshot(await AsyncStorage.getItem(ANDROID_SNAPSHOT_KEY));
 
   renderWidget(
     renderClockWidget(

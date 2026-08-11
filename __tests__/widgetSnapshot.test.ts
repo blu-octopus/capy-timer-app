@@ -30,7 +30,10 @@ function setup() {
     elapsedMs: 0,
     schedule: [],
     coinsAwarded: 0,
+    coinsCapped: false,
     skipped: false,
+    paidFocusMsToday: 0,
+    paidFocusDay: 0,
   });
 }
 

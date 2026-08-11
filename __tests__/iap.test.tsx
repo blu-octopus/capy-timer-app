@@ -25,6 +25,7 @@ jest.mock('@/src/purchases', () => ({
   getCoinOfferings: jest.fn(),
   purchaseCoins: jest.fn(),
   restorePurchases: jest.fn(),
+  subscribeToPurchaseUpdates: jest.fn(() => () => undefined),
 }));
 
 import {
@@ -48,7 +49,7 @@ const offering = {
 beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-  useAppStore.setState({ wallet: { coins: 200 } });
+  useAppStore.setState({ wallet: { coins: 200 }, fulfilledPurchaseIds: [] });
 });
 
 describe('IapScreen', () => {
@@ -91,7 +92,11 @@ describe('IapScreen', () => {
   it('credits the wallet and confirms after a successful purchase', async () => {
     mockedEnsure.mockReturnValue({ available: true });
     mockedGetOfferings.mockResolvedValue([offering]);
-    mockedPurchase.mockResolvedValue({ outcome: 'success', coinsAwarded: 1000 });
+    mockedPurchase.mockResolvedValue({
+      outcome: 'success',
+      coinsAwarded: 1000,
+      transactionId: 'txn_1',
+    });
 
     render(<IapScreen />);
     await waitFor(() => expect(screen.getByText('1,000')).toBeTruthy());
@@ -102,6 +107,38 @@ describe('IapScreen', () => {
 
     await waitFor(() => expect(useAppStore.getState().wallet.coins).toBe(1200));
     expect(Alert.alert).toHaveBeenCalledWith('Thanks!', expect.stringContaining('+1,000'));
+  });
+
+  it('does not credit the same transaction twice', async () => {
+    mockedEnsure.mockReturnValue({ available: true });
+    mockedGetOfferings.mockResolvedValue([offering]);
+    mockedPurchase.mockResolvedValue({
+      outcome: 'success',
+      coinsAwarded: 1000,
+      transactionId: 'txn_dup',
+    });
+
+    render(<IapScreen />);
+    await waitFor(() => expect(screen.getByText('1,000')).toBeTruthy());
+
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: /1,000 coins/i }));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByRole('button', { name: /1,000 coins/i }));
+    });
+
+    await waitFor(() => expect(useAppStore.getState().wallet.coins).toBe(1200));
+  });
+
+  it('shows an error, not empty, when offerings fail to load', async () => {
+    mockedEnsure.mockReturnValue({ available: true });
+    mockedGetOfferings.mockRejectedValue(new Error('offline'));
+
+    render(<IapScreen />);
+
+    await waitFor(() => expect(screen.getByText(/couldn't load the shop/i)).toBeTruthy());
+    expect(screen.getByText('Try again')).toBeTruthy();
   });
 
   it('does not credit the wallet or alert when the purchase is cancelled', async () => {

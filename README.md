@@ -73,6 +73,10 @@ Install the resulting build on a device or simulator, then run
 
 ## In-app purchases
 
+Economy, shop vs prestige, Capy Club, and SKU ids: see
+[docs/big-number-economy.md](docs/big-number-economy.md) (implementation plan).
+The product ids below are the *current code* until that plan is executed.
+
 No RevenueCat project and no App Store Connect / Google Play Console products
 exist yet. Until they do, `ensurePurchasesConfigured()` in `src/purchases/`
 correctly reports "not set up," and the coin shop shows that state rather than
@@ -262,9 +266,10 @@ chain independent of any browser.
 - [ ] Set up RevenueCat + store products (see [In-app purchases](#in-app-purchases))
 - [ ] Set `ios.appleTeamId` in `app.json` and confirm the widget extension
       builds via an EAS development build (see [Home screen widgets](#home-screen-widgets))
-- [ ] Write and host a privacy policy (required by both stores; this app
-      collects no personal data beyond what RevenueCat/the stores themselves
-      require for purchase processing, but a policy is still mandatory)
+- [ ] Host the privacy policy draft in [docs/privacy-policy.md](docs/privacy-policy.md)
+      and paste the public URL into App Store Connect / Play Console (required
+      by both stores; this app collects no personal data beyond what
+      RevenueCat/the stores themselves require for purchase processing)
 - [ ] `eas build --profile production` for both platforms
 - [ ] `eas submit` once builds are ready, or upload manually via App Store
       Connect / Play Console

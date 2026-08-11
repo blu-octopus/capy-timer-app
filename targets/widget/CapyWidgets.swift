@@ -92,6 +92,14 @@ private struct WidgetSnapshot: Decodable {
   let phase: String?
   let phaseLabel: String
   let phaseEndAt: Double? // epoch ms
+
+  // Decodable does not synthesize a memberwise init — placeholder() needs one.
+  init(status: String, phase: String?, phaseLabel: String, phaseEndAt: Double?) {
+    self.status = status
+    self.phase = phase
+    self.phaseLabel = phaseLabel
+    self.phaseEndAt = phaseEndAt
+  }
 }
 
 struct ClockEntry: TimelineEntry {

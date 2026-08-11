@@ -7,7 +7,7 @@
 
 import Purchases from 'react-native-purchases';
 
-import { hasPremium, PREMIUM_ENTITLEMENT_ID } from '@/src/purchases/entitlements';
+import { hasPremium, lookupPremium, PREMIUM_ENTITLEMENT_ID } from '@/src/purchases/entitlements';
 import { resetPurchasesStatusForTests } from '@/src/purchases';
 
 jest.mock('react-native-purchases', () => ({
@@ -56,6 +56,13 @@ describe('hasPremium', () => {
     mockedGetCustomerInfo.mockRejectedValue(new Error('offline'));
 
     await expect(hasPremium()).resolves.toBe(false);
+    await expect(lookupPremium()).resolves.toEqual({ kind: 'unknown' });
+  });
+
+  it('reports inactive rather than unknown when RevenueCat says no entitlement', async () => {
+    mockedGetCustomerInfo.mockResolvedValue({ entitlements: { active: {} } });
+
+    await expect(lookupPremium()).resolves.toEqual({ kind: 'inactive' });
   });
 
   it('is false without asking RevenueCat when purchases are unavailable', async () => {
@@ -63,6 +70,7 @@ describe('hasPremium', () => {
     resetPurchasesStatusForTests();
 
     await expect(hasPremium()).resolves.toBe(false);
+    await expect(lookupPremium()).resolves.toEqual({ kind: 'unknown' });
     expect(mockedGetCustomerInfo).not.toHaveBeenCalled();
   });
 

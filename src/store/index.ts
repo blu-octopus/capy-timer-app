@@ -4,14 +4,14 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { newSessionId, recordSession } from '../db/sessions';
 import type { NewSession } from '../db/schema';
-import { hasPremium } from '../purchases/entitlements';
+import { lookupPremium } from '../purchases/entitlements';
 import {
+  applyDailyCap,
   buildSchedule,
-  coinsForFocusMs,
   resolvePosition,
-  totalPlanMs,
   type CategoryItem,
   type Companion,
+  type DailyEarnState,
   type PhaseSegment,
   type RunPhase,
   type RunStatus,
@@ -57,6 +57,8 @@ interface RunState {
   skippedFocusMs: number;
   skippedBreakMs: number;
   coinsAwarded: number;
+  /** True when the daily cap withheld coins this run, so the UI can say so. */
+  coinsCapped: boolean;
 }
 
 const IDLE_RUN: RunState = {
@@ -76,6 +78,7 @@ const IDLE_RUN: RunState = {
   skippedFocusMs: 0,
   skippedBreakMs: 0,
   coinsAwarded: 0,
+  coinsCapped: false,
 };
 
 export interface AppState extends RunState {
@@ -89,11 +92,17 @@ export interface AppState extends RunState {
    * tier; `syncPremium` corrects it once RevenueCat can be reached.
    */
   isPremium: boolean;
+  /** Focus ms already paid out during `paidFocusDay`. */
+  paidFocusMsToday: number;
+  /** Local midnight of the day `paidFocusMsToday` refers to. */
+  paidFocusDay: number;
+  /** StoreKit/Play transaction ids that have already credited the wallet. */
+  fulfilledPurchaseIds: string[];
 
   updatePlan: (updates: Partial<SessionPlan>) => void;
   setCategories: (categories: CategoryItem[]) => void;
   setPremium: (isPremium: boolean) => void;
-  /** Re-reads the entitlement from RevenueCat. Never throws. */
+  /** Re-reads the entitlement from RevenueCat. Never throws. Does not clobber a persisted true on lookup failure. */
   syncPremium: () => Promise<void>;
 
   startRun: (now?: number) => void;
@@ -111,6 +120,11 @@ export interface AppState extends RunState {
   reconcileAfterRestart: (now?: number) => void;
 
   addCoins: (amount: number) => void;
+  /**
+   * Credits `coins` once per `transactionId`. Returns false if this id
+   * already paid out (crash/retry / listener replay).
+   */
+  fulfillPurchase: (transactionId: string, coins: number) => boolean;
   unlockCompanion: (id: string) => boolean;
   renameCompanion: (id: string, name: string) => void;
 }
@@ -164,18 +178,25 @@ export const useAppStore = create<AppState>()(
       companions: DEFAULT_COMPANIONS,
       categories: [],
       isPremium: false,
+      paidFocusMsToday: 0,
+      paidFocusDay: 0,
+      fulfilledPurchaseIds: [],
 
       updatePlan: (updates) => set((s) => ({ plan: { ...s.plan, ...updates } })),
       setCategories: (categories) => set({ categories }),
       setPremium: (isPremium) => set({ isPremium }),
 
       syncPremium: async () => {
-        set({ isPremium: await hasPremium() });
+        const lookup = await lookupPremium();
+        if (lookup.kind === 'unknown') return;
+        set({ isPremium: lookup.kind === 'active' });
       },
 
       startRun: (now = Date.now()) => {
-        const { plan } = get();
-        const schedule = buildSchedule(plan);
+        const state = get();
+        if (state.status === 'running' || state.status === 'paused') return;
+
+        const schedule = buildSchedule(state.plan);
         set({
           ...IDLE_RUN,
           runId: newSessionId(),
@@ -190,8 +211,13 @@ export const useAppStore = create<AppState>()(
       pause: (now = Date.now()) => {
         const state = get();
         if (state.status !== 'running') return;
+        const elapsedMs = elapsedAt(state, now);
+        if (resolvePosition(state.schedule, elapsedMs).finished) {
+          get().endRun(now);
+          return;
+        }
         // Freeze progress; resume re-anchors so paused time never counts.
-        set({ ...applyPosition(state, elapsedAt(state, now)), status: 'paused' });
+        set({ ...applyPosition(state, elapsedMs), status: 'paused' });
       },
 
       resume: (now = Date.now()) => {
@@ -209,7 +235,8 @@ export const useAppStore = create<AppState>()(
         if (!current) return;
 
         const nextOffset = current.offsetMs + current.durationMs;
-        const isLast = nextOffset >= totalPlanMs(state.plan);
+        const scheduleMs = state.schedule.reduce((sum, seg) => sum + seg.durationMs, 0);
+        const isLast = nextOffset >= scheduleMs;
 
         if (isLast) {
           // endRun resolves position from real elapsed time, which already
@@ -239,9 +266,16 @@ export const useAppStore = create<AppState>()(
         const elapsedMs = state.status === 'paused' ? state.elapsedMs : elapsedAt(state, now);
         const position = resolvePosition(state.schedule, elapsedMs);
         // Ending early still pays for focus minutes already worked, but
-        // never for focus time that was skipped over.
-        const coins = coinsForFocusMs(
+        // never for focus time that was skipped over. The daily cap is time,
+        // not coins — Club 2x (later) must not feed back into paidMs.
+        const daily: DailyEarnState = {
+          paidFocusMsToday: state.paidFocusMsToday,
+          paidFocusDay: state.paidFocusDay,
+        };
+        const earning = applyDailyCap(
           Math.max(0, position.focusMsCompleted - state.skippedFocusMs),
+          daily,
+          now,
         );
 
         // A run that completed in the background ended at its scheduled end,
@@ -256,8 +290,11 @@ export const useAppStore = create<AppState>()(
           focusMsCompleted: position.focusMsCompleted,
           breakMsCompleted: position.breakMsCompleted,
           finishedAt,
-          coinsAwarded: coins,
-          wallet: { coins: s.wallet.coins + coins },
+          coinsAwarded: earning.coins,
+          coinsCapped: earning.capped,
+          paidFocusMsToday: earning.nextDaily.paidFocusMsToday,
+          paidFocusDay: earning.nextDaily.paidFocusDay,
+          wallet: { coins: s.wallet.coins + earning.coins },
         }));
 
         // Fire-and-forget: recordSession never throws, and the runId-keyed
@@ -313,6 +350,17 @@ export const useAppStore = create<AppState>()(
       addCoins: (amount) =>
         set((s) => ({ wallet: { coins: Math.max(0, s.wallet.coins + amount) } })),
 
+      fulfillPurchase: (transactionId, coins) => {
+        if (!transactionId || coins <= 0) return false;
+        const state = get();
+        if (state.fulfilledPurchaseIds.includes(transactionId)) return false;
+        set({
+          wallet: { coins: state.wallet.coins + coins },
+          fulfilledPurchaseIds: [...state.fulfilledPurchaseIds, transactionId],
+        });
+        return true;
+      },
+
       unlockCompanion: (id) => {
         const state = get();
         const companion = state.companions.find((c) => c.id === id);
@@ -345,6 +393,9 @@ export const useAppStore = create<AppState>()(
         wallet: state.wallet,
         companions: state.companions,
         isPremium: state.isPremium,
+        paidFocusMsToday: state.paidFocusMsToday,
+        paidFocusDay: state.paidFocusDay,
+        fulfilledPurchaseIds: state.fulfilledPurchaseIds,
         runId: state.runId,
         status: state.status,
         phase: state.phase,
@@ -361,6 +412,7 @@ export const useAppStore = create<AppState>()(
         skippedFocusMs: state.skippedFocusMs,
         skippedBreakMs: state.skippedBreakMs,
         coinsAwarded: state.coinsAwarded,
+        coinsCapped: state.coinsCapped,
       }),
       onRehydrateStorage: () => (state) => {
         state?.reconcileAfterRestart();

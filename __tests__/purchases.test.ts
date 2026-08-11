@@ -14,6 +14,7 @@ import {
   purchaseCoins,
   resetPurchasesStatusForTests,
   restorePurchases,
+  subscribeToPurchaseUpdates,
 } from '@/src/purchases';
 
 jest.mock('react-native-purchases', () => ({
@@ -23,14 +24,17 @@ jest.mock('react-native-purchases', () => ({
     getOfferings: jest.fn(),
     purchasePackage: jest.fn(),
     restorePurchases: jest.fn(),
+    addCustomerInfoUpdateListener: jest.fn(),
+    removeCustomerInfoUpdateListener: jest.fn(),
   },
-  PURCHASES_ERROR_CODE: { PURCHASE_CANCELLED_ERROR: '1' },
+  PURCHASES_ERROR_CODE: { PURCHASE_CANCELLED_ERROR: '1', PAYMENT_PENDING_ERROR: 'PAYMENT_PENDING' },
 }));
 
 const mockedConfigure = Purchases.configure as jest.Mock;
 const mockedGetOfferings = Purchases.getOfferings as jest.Mock;
 const mockedPurchasePackage = Purchases.purchasePackage as jest.Mock;
 const mockedRestorePurchases = Purchases.restorePurchases as jest.Mock;
+const mockedAddListener = Purchases.addCustomerInfoUpdateListener as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -112,6 +116,14 @@ describe('getCoinOfferings', () => {
 
     expect(await getCoinOfferings()).toEqual([]);
   });
+
+  it('throws when the offerings call itself fails, so the screen can tell that apart from empty', async () => {
+    process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY = 'test-key';
+    mockedConfigure.mockImplementation(() => undefined);
+    mockedGetOfferings.mockRejectedValue(new Error('offline'));
+
+    await expect(getCoinOfferings()).rejects.toThrow('offline');
+  });
 });
 
 describe('purchaseCoins', () => {
@@ -122,8 +134,33 @@ describe('purchaseCoins', () => {
   } as Parameters<typeof purchaseCoins>[0];
 
   it('credits the catalogue coin amount on success', async () => {
+    mockedPurchasePackage.mockResolvedValue({
+      customerInfo: {
+        nonSubscriptionTransactions: [
+          { productIdentifier: 'capycoins_1000', transactionIdentifier: 'txn_abc' },
+        ],
+      },
+    });
+    expect(await purchaseCoins(offering)).toEqual({
+      outcome: 'success',
+      coinsAwarded: 1000,
+      transactionId: 'txn_abc',
+    });
+  });
+
+  it('falls back to a product-scoped id when the SDK omits a transaction identifier', async () => {
     mockedPurchasePackage.mockResolvedValue({});
-    expect(await purchaseCoins(offering)).toEqual({ outcome: 'success', coinsAwarded: 1000 });
+    const result = await purchaseCoins(offering);
+    expect(result.outcome).toBe('success');
+    if (result.outcome === 'success') {
+      expect(result.transactionId.startsWith('capycoins_1000:')).toBe(true);
+      expect(result.coinsAwarded).toBe(1000);
+    }
+  });
+
+  it('reports pending so Ask-to-Buy can fulfill later', async () => {
+    mockedPurchasePackage.mockRejectedValue({ code: 'PAYMENT_PENDING' });
+    expect(await purchaseCoins(offering)).toEqual({ outcome: 'pending' });
   });
 
   it('reports cancellation distinctly from a real failure', async () => {
@@ -180,3 +217,25 @@ describe('restorePurchases', () => {
     });
   });
 });
+
+describe('subscribeToPurchaseUpdates', () => {
+  it('does not fulfill historical consumables that this process never marked pending', () => {
+    process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY = 'test-key';
+    mockedConfigure.mockImplementation(() => undefined);
+
+    const fulfill = jest.fn(() => true);
+    subscribeToPurchaseUpdates(fulfill);
+
+    const listener = mockedAddListener.mock.calls[0]![0] as (info: {
+      nonSubscriptionTransactions: { productIdentifier: string; transactionIdentifier: string }[];
+    }) => void;
+    listener({
+      nonSubscriptionTransactions: [
+        { productIdentifier: 'capycoins_1000', transactionIdentifier: 'old_txn' },
+      ],
+    });
+
+    expect(fulfill).not.toHaveBeenCalled();
+  });
+});
+

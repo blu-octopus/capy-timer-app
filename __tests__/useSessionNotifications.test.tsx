@@ -42,9 +42,12 @@ function setup() {
     elapsedMs: 0,
     schedule: [],
     coinsAwarded: 0,
+    coinsCapped: false,
     skipped: false,
     skippedFocusMs: 0,
     skippedBreakMs: 0,
+    paidFocusMsToday: 0,
+    paidFocusDay: 0,
   });
 }
 
