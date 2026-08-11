@@ -29,6 +29,7 @@ export default function IapScreen() {
   const router = useRouter();
   const coins = useAppStore((s) => s.wallet.coins);
   const addCoins = useAppStore((s) => s.addCoins);
+  const syncPremium = useAppStore((s) => s.syncPremium);
   const { size, onLayout } = useMeasuredSize();
 
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
@@ -57,6 +58,9 @@ export default function IapScreen() {
 
     if (result.outcome === 'success') {
       addCoins(result.coinsAwarded);
+      // Coin packs grant no entitlement today, but re-reading is cheap and
+      // means a premium SKU added to this screen later needs no new wiring.
+      void syncPremium();
       Alert.alert('Thanks!', `+${result.coinsAwarded.toLocaleString('en-US')} coins added.`);
     } else if (result.outcome === 'error') {
       Alert.alert('Purchase failed', result.message);
@@ -68,6 +72,9 @@ export default function IapScreen() {
     setRestoring(true);
     const result = await restorePurchases();
     setRestoring(false);
+
+    // Restore is the one path that can hand premium back on a fresh install.
+    void syncPremium();
 
     if (result.outcome === 'error') {
       Alert.alert('Restore failed', result.message);

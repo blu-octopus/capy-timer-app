@@ -66,6 +66,29 @@ jest.mock('expo-audio', () => ({
   setAudioModeAsync: jest.fn().mockResolvedValue(undefined),
 }));
 
+// react-native-purchases pulls in @revenuecat/purchases-js-hybrid-mappings,
+// which ships untransformed ESM that Jest cannot parse — so importing it
+// anywhere in a module graph breaks that whole test file. The store reaches
+// it via src/purchases/entitlements, which puts it in nearly every graph.
+//
+// This models the real Jest/Expo Go state: the native module isn't linked,
+// so `configure()` throws and everything downstream reports unavailable.
+// purchases.test.ts overrides this file-locally (Jest scopes mocks per file)
+// to drive the available paths.
+jest.mock('react-native-purchases', () => ({
+  __esModule: true,
+  default: {
+    configure: jest.fn(() => {
+      throw new Error('native module unavailable');
+    }),
+    getOfferings: jest.fn().mockResolvedValue({ current: null }),
+    purchasePackage: jest.fn(),
+    restorePurchases: jest.fn().mockResolvedValue({ entitlements: { active: {} } }),
+    getCustomerInfo: jest.fn().mockResolvedValue({ entitlements: { active: {} } }),
+  },
+  PURCHASES_ERROR_CODE: { PURCHASE_CANCELLED_ERROR: '1' },
+}));
+
 // Neither of these native modules exists in Expo Go, on either platform —
 // that's the whole point of the guarded-require pattern in src/widgets/.
 // Default mocks model the "present and working" case; bridge.test.ts

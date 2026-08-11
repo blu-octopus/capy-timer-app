@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { newSessionId, recordSession } from '../db/sessions';
 import type { NewSession } from '../db/schema';
+import { hasPremium } from '../purchases/entitlements';
 import {
   buildSchedule,
   coinsForFocusMs,
@@ -82,9 +83,18 @@ export interface AppState extends RunState {
   wallet: { coins: number };
   companions: Companion[];
   categories: CategoryItem[];
+  /**
+   * Whether the premium entitlement is active. Persisted so a cold launch
+   * with no network doesn't silently downgrade a paying customer to the free
+   * tier; `syncPremium` corrects it once RevenueCat can be reached.
+   */
+  isPremium: boolean;
 
   updatePlan: (updates: Partial<SessionPlan>) => void;
   setCategories: (categories: CategoryItem[]) => void;
+  setPremium: (isPremium: boolean) => void;
+  /** Re-reads the entitlement from RevenueCat. Never throws. */
+  syncPremium: () => Promise<void>;
 
   startRun: (now?: number) => void;
   pause: (now?: number) => void;
@@ -153,9 +163,15 @@ export const useAppStore = create<AppState>()(
       wallet: { coins: 200 },
       companions: DEFAULT_COMPANIONS,
       categories: [],
+      isPremium: false,
 
       updatePlan: (updates) => set((s) => ({ plan: { ...s.plan, ...updates } })),
       setCategories: (categories) => set({ categories }),
+      setPremium: (isPremium) => set({ isPremium }),
+
+      syncPremium: async () => {
+        set({ isPremium: await hasPremium() });
+      },
 
       startRun: (now = Date.now()) => {
         const { plan } = get();
@@ -328,6 +344,7 @@ export const useAppStore = create<AppState>()(
         plan: state.plan,
         wallet: state.wallet,
         companions: state.companions,
+        isPremium: state.isPremium,
         runId: state.runId,
         status: state.status,
         phase: state.phase,

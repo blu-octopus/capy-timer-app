@@ -20,6 +20,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useWidgetSync } from '@/hooks/useWidgetSync';
 import { loadCategories } from '@/src/db/categories';
+import { useAppStore } from '@/src/store';
 import { colors } from '@/src/theme/tokens';
 
 // Design is light-only (capy-ui has no dark tokens).
@@ -48,6 +49,13 @@ export default function RootLayout() {
   // Categories live in SQLite; hydrate the store cache once at startup.
   useEffect(() => {
     void loadCategories();
+  }, []);
+
+  // The persisted `isPremium` carries the last known answer through a cold
+  // offline launch; this corrects it (in either direction — expiry as well as
+  // purchase) as soon as RevenueCat is reachable.
+  useEffect(() => {
+    void useAppStore.getState().syncPremium();
   }, []);
 
   // Mounted at the root, not just the timer screen — widgets must reflect
